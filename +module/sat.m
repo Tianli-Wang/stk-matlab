@@ -318,7 +318,8 @@ function batchRenameSatellitesInSTK2(root, oldNames)
         oldName = oldNames{i};
         
         % 使用 qf_i 生成新名称
-        newName = sprintf('qf_%d', i);  % 假设 qf_i 的格式为 'qf_1', 'qf_2' 等
+%         newName = sprintf('qf_%d_%d', mod(floor(i/10),10), mod(i, 10));  % 假设 qf_i 的格式为 'qf_1', 'qf_2' 等
+        newName = sprintf('QF_%d', i);  % 假设 qf_i 的格式为 'qf_1', 'qf_2' 等
         
         % 修改 STK 中的名称
         try

@@ -1,17 +1,16 @@
-%% STK åº”ç”¨åˆå§‹åŒ–
 app = actxserver('STK11.application');
 root = app.Personality2;
 
-%% é‡ç½® STK åœºæ™¯
-fprintf('æ­£åœ¨é‡ç½® STK åœºæ™¯,ä»¥ç¡®ä¿ç¯å¢ƒå¹²å‡€...\n');
+%% ÖØÖÃ STK ³¡¾°
+fprintf('ÕıÔÚÖØÖÃ STK ³¡¾°,ÒÔÈ·±£»·¾³¸É¾»...\n');
 try
-    root.CloseScenario(); % å¼ºè¡Œå…³é—­ä»»ä½•å·²æ‰“å¼€çš„åœºæ™¯
+    root.CloseScenario(); % Ç¿ĞĞ¹Ø±ÕÈÎºÎÒÑ´ò¿ªµÄ³¡¾°
 catch ME
-    % å¦‚æœæ²¡æœ‰æ‰“å¼€çš„åœºæ™¯,CloseScenario ä¼šæŠ¥é”™,å¿½ç•¥è¿™ä¸ªé”™è¯¯
-    fprintf('ä¿¡æ¯:æ²¡æœ‰éœ€è¦å…³é—­çš„æ—§åœºæ™¯ã€‚\n');
+    % Èç¹ûÃ»ÓĞ´ò¿ªµÄ³¡¾°,CloseScenario »á±¨´í,ºöÂÔÕâ¸ö´íÎó
+    fprintf('ĞÅÏ¢:Ã»ÓĞĞèÒª¹Ø±ÕµÄ¾É³¡¾°¡£\n');
 end
 
-%% åˆ›å»ºåœºæ™¯å¹¶è®¾ç½®æ—¶é—´èŒƒå›´
+%% ´´½¨³¡¾°²¢ÉèÖÃÊ±¼ä·¶Î§
 StartTime = '6 Jan 2025 00:00:00.000';
 StopTime = '7 Jan 2025 00:00:00.000';
 scenario = root.Children.New('eScenario', 'MATLAB_PredatorMission');
@@ -19,120 +18,182 @@ scenario.SetTimePeriod(StartTime, StopTime);
 scenario.StartTime = StartTime;
 scenario.StopTime = StopTime;
 
-%% é‡ç½®åŠ¨ç”»
+%% ÖØÖÃ¶¯»­
 try
     root.ExecuteCommand('Animate * Reset');
-    disp('åŠ¨ç”»å·²å¤ä½æˆåŠŸ');
+    disp('¶¯»­ÒÑ¸´Î»³É¹¦');
 catch ME
-    disp('åŠ¨ç”»å¤ä½å¤±è´¥:');
+    disp('¶¯»­¸´Î»Ê§°Ü:');
     disp(ME.message);
 end
 
-%% æ˜Ÿåº§å‚æ•°è®¾ç½®
-P = 10;  % è½¨é“å¹³é¢æ•°é‡
-N = 15;  % æ¯ä¸ªå¹³é¢çš„å«æ˜Ÿæ•°é‡
+%% 10ÖÖÔ¤¶¨ÒåÑÕÉ« (RGB)
+colors = [ ...
+    255, 0, 0;   % 1. ºìÉ«
+    0, 255, 0;   % 2. ÂÌÉ«
+    0, 0, 255;   % 3. À¶É«
+    255, 255, 0; % 4. »ÆÉ«
+    0, 255, 255; % 5. ÇàÉ«
+    255, 0, 255; % 6. Ñóºì
+    255, 128, 0; % 7. ³ÈÉ«
+    128, 0, 255; % 8. ×ÏÉ«
+    0, 128, 0;   % 9. ÉîÂÌ
+    255, 192, 203 % 10. ·ÛÉ«
+];
+num_colors = size(colors, 1);
+
+%% ĞÇ×ù²ÎÊıÉèÖÃ
+P = 10;  % ¹ìµÀÆ½ÃæÊıÁ¿
+N = 15;  % Ã¿¸öÆ½ÃæµÄÎÀĞÇÊıÁ¿
 % P = 3;
 % N = 36;
 
-%% åˆ›å»º Walker æ˜Ÿåº§
+%% ´´½¨ Walker ĞÇ×ù
 for i = 1:P
     
     % ========================================
-    % 1. è®¾ç½®"ç§å­å«æ˜Ÿ"å‚æ•°
+    % 1. ÉèÖÃ"ÖÖ×ÓÎÀĞÇ"²ÎÊı
     % ========================================
-    % ä¸ºäº†åŒºåˆ†ä¸åŒå¾ªç¯ç”Ÿæˆçš„å«æ˜Ÿ,ç»™ç§å­å«æ˜Ÿèµ·ä¸€ä¸ªå¸¦ä¸‹æ ‡çš„åå­—
+    % ÎªÁËÇø·Ö²»Í¬Ñ­»·Éú³ÉµÄÎÀĞÇ,¸øÖÖ×ÓÎÀĞÇÆğÒ»¸ö´øÏÂ±êµÄÃû×Ö
     seedSatelliteName = sprintf('QF_%d', i);
     
-    % è½¨é“ä¸åˆå§‹çŠ¶æ€å‚æ•°
+    % ¹ìµÀÓë³õÊ¼×´Ì¬²ÎÊı
     params = struct();
     params.satelliteName = seedSatelliteName;
     params.perigeeAlt    = 1066;      % km
     params.apogeeAlt     = 1066;      % km
-    params.inclination   = 89;        % åº¦
-    params.argOfPerigee  = 0;         % è¿‘åœ°ç‚¹å¹…è§’
-    params.RAAN          = i * 10.2;  % å‡äº¤ç‚¹èµ¤ç»(å¯æŒ‰éœ€åœ¨å¾ªç¯ä¸­æ”¹)
-    params.Anomaly       = i * 4.5;   % çœŸè¿‘ç‚¹è§’(æˆ–å¹³è¿‘ç‚¹è§’)
+    params.inclination   = 89;        % ¶È
+    params.argOfPerigee  = 0;         % ½üµØµã·ù½Ç
+    params.RAAN          = i * 18;  % Éı½»µã³à¾­(¿É°´ĞèÔÚÑ­»·ÖĞ¸Ä)
+    params.Anomaly       = i * 4.5;   % Õæ½üµã½Ç(»òÆ½½üµã½Ç)
     
     % ========================================
-    % 2. åˆ›å»ºç§å­å«æ˜Ÿ
+    % 2. ´´½¨ÖÖ×ÓÎÀĞÇ
     % ========================================
-    satObj = module.sat();  % æ‚¨è‡ªå®šä¹‰çš„ sat ç±»
+    satObj = module.sat();  % Äú×Ô¶¨ÒåµÄ sat Àà
     satObj.createSatellite(root, scenario, params);
     
     % ========================================
-    % 3. å®šä¹‰å¹¶åˆ›å»º Walker æ˜Ÿåº§
+    % 3. ¶¨Òå²¢´´½¨ Walker ĞÇ×ù
     % ========================================
-    % è¿™é‡Œè®¾ç½®1ä¸ªè½¨é“é¢ã€æ¯é¢Né¢—å«æ˜Ÿ,ä¸åˆ†é¢é—´ç›¸ä½å¢é‡
+    % ÕâÀïÉèÖÃ1¸ö¹ìµÀÃæ¡¢Ã¿ÃæN¿ÅÎÀĞÇ,²»·ÖÃæ¼äÏàÎ»ÔöÁ¿
     params_constellation = struct();
-    params_constellation.seedSatelliteName        = seedSatelliteName;
-    params_constellation.numPlanes                = 1;   % è½¨é“å¹³é¢æ•°é‡
-    params_constellation.numSatsPerPlane          = N;   % æ¯ä¸ªå¹³é¢çš„å«æ˜Ÿæ•°
-    params_constellation.interPlanePhaseIncrement = 0;   % å¹³é¢é—´ç›¸ä½å¢é‡(æ­¤å¤„ä¸º0)
+    params_constellation.seedSatelliteName       = seedSatelliteName;
+    params_constellation.numPlanes               = 1;    % ¹ìµÀÆ½ÃæÊıÁ¿
+    params_constellation.numSatsPerPlane         = N;    % Ã¿¸öÆ½ÃæµÄÎÀĞÇÊı
+    params_constellation.interPlanePhaseIncrement = 0;    % Æ½Ãæ¼äÏàÎ»ÔöÁ¿(´Ë´¦Îª0)
     
     satObj.createWalkerConstellation_Delta(root, params_constellation);
     
+    
+    
     % ========================================
-    % 4. å¸è½½ç§å­å«æ˜Ÿ
+    % 5. Ğ¶ÔØÖÖ×ÓÎÀĞÇ (Ô­µÚ4²½)
     % ========================================
-    % ç”±äº Walker æ˜Ÿåº§å·²åˆ›å»ºå®Œ,å¯ä»¥åˆ é™¤åŸå…ˆçš„ç§å­å«æ˜Ÿ
+    % ÓÉÓÚ Walker ĞÇ×ùÒÑ´´½¨Íê,¿ÉÒÔÉ¾³ıÔ­ÏÈµÄÖÖ×ÓÎÀĞÇ
     unloadCmd = sprintf('Unload / */Satellite/%s', seedSatelliteName);
     root.ExecuteCommand(unloadCmd);
     
 end
 
-%% è®¡ç®—ä¸¤é¢—å«æ˜Ÿä¹‹é—´çš„è·ç¦»
-satName1 = 'QF_1101';  % æ›¿æ¢ä¸ºæ‚¨æƒ³æŸ¥è¯¢çš„ç¬¬ä¸€é¢—å«æ˜Ÿ
-satName2 = 'QF_2101';  % æ›¿æ¢ä¸ºæ‚¨æƒ³æŸ¥è¯¢çš„ç¬¬äºŒé¢—å«æ˜Ÿ
-timestep = 60;         % é‡‡æ ·æ—¶é—´æ­¥é•¿(ç§’)
 
-% å®ä¾‹åŒ– paperfunction æ¨¡å—
+% ÅúÁ¿ÖØÃüÃûÎÀĞÇ²¢ÉèÖÃÑÕÉ«
+sat = module.sat();
+satellite_names = sat.getSatelliteNames(scenario);
+sat.batchRenameSatellitesInSTK2(root, satellite_names);  % ¼ÙÉèÄúÊ¹ÓÃÁËÕâ¸öÖØÃüÃûº¯Êı
+
+
+for i = 1 : P
+   % ========================================
+    % 4. Îª¸ÃÆ½ÃæµÄÎÀĞÇÉèÖÃÑÕÉ« (ĞÂÌí¼Ó)
+    % ========================================
+    % ¼ÙÉè createWalkerConstellation_Delta ´´½¨µÄÎÀĞÇÃüÃûÎª QF_i01, QF_i02, ...
+    % ÆäÖĞ i ÊÇÆ½ÃæË÷Òı (1-P), 01-N ÊÇÎÀĞÇË÷Òı
+    % i=1  -> QF_101 ... QF_115
+    % i=10 -> QF_1001 ... QF_1015
+    
+    fprintf('ÕıÔÚÎªÆ½Ãæ %d µÄ %d ¿ÅÎÀĞÇÉèÖÃÑÕÉ«...\n', i, N);
+    for j = 1:N
+        % È·¶¨ÎÀĞÇÃû³Æ (STK Walker¹¤¾ßÄ¬ÈÏÃüÃû: SeedName + 01, 02...)
+        satName = sprintf('QF_%d', (i-1)*N+j);
+        
+        rgb = colors(i, :);
+        
+        % µ÷ÓÃÓÃ»§Ä£¿éÉèÖÃÑÕÉ«
+        try
+            % ¼ÙÉè module.setSatelliteColorRGB ÊÇÒ»¸ö¿ÉÒÔ·ÃÎÊµÄ¾²Ì¬·½·¨»òÔÚÂ·¾¶ÖĞ
+            module.setSatelliteColorRGB(root, satName, rgb(1), rgb(2), rgb(3));
+        catch ME_color
+            fprintf('¾¯¸æ: ÎŞ·¨Îª %s ÉèÖÃÑÕÉ«. ´íÎó: %s\n', satName, ME_color.message);
+            % ×¢Òâ: Èç¹û setSatelliteColorRGB ÊÇ satObj µÄÒ»¸ö·½·¨,
+            % ÄúÓ¦Ê¹ÓÃ: satObj.setSatelliteColorRGB(root, satName, rgb(1), rgb(2), rgb(3));
+        end
+    end
+end
+
+
+
+%% ¼ÆËãÁ½¿ÅÎÀĞÇÖ®¼äµÄ¾àÀë
 paperFunc = module.paperfunction();
+satName1 = 'qf_1';  % Ìæ»»ÎªÄúÏë²éÑ¯µÄµÚÒ»¿ÅÎÀĞÇ (Ô­: 'QF_1101')
+satName2 = 'qf_16';  % Ìæ»»ÎªÄúÏë²éÑ¯µÄµÚ¶ş¿ÅÎÀĞÇ (Ô­: 'QF_2101')
 
-% è°ƒç”¨å‡½æ•°è·å–è·ç¦»
-% è¯¥å‡½æ•°è¿”å› UTC æ—¶é—´çš„ datetime å‘é‡ (t) å’Œ è·ç¦» (mag) å‘é‡
-disp(['æ­£åœ¨è®¡ç®— ', satName1, ' ä¸ ', satName2, ' ä¹‹é—´çš„è·ç¦»...']);
+% t_specific = datetime('10 Nov 2025 12:30:45.000', 'TimeZone', 'UTC', 'InputFormat', 'dd MMM yyyy HH:mm:ss.SSS');
+
+t_specific = '6 Jan 2025 00:00:00.000';
+% t_specific = datetime(Time_str, 'InputFormat', 'dd MMM yyyy HH:mm:ss.SSS', 'TimeZone', 'UTC');
+
+disp(['ÕıÔÚ¼ÆËã ', satName1, ' Óë ', satName2, ' Ö®¼äµÄ¾àÀë...']);
 try
-    [time_vec, distance_km] = paperFunc.ab_vector_range(root, satName1, satName2, timestep);
+    distance_km = paperFunc.ab_vector_range_at_time(root, satName1, satName2, t_specific);
     
-    disp('è®¡ç®—å®Œæˆã€‚');
-    
-    % ========================================
-    % 5. ç»˜åˆ¶è·ç¦»å˜åŒ–å›¾
-    % ========================================
-    figure;
-    plot(time_vec, distance_km);
-    title(['è·ç¦»: ', satName1, ' to ', satName2], 'Interpreter', 'none');
-    xlabel('æ—¶é—´ (UTC)');
-    ylabel('è·ç¦» (km)');  % å¹…å€¼å•ä½é€šå¸¸æ˜¯ km
+    fprintf('ÔÚ %s Ê±¿Ì:\n', string(t_specific));
+    fprintf('ÎÀĞÇ %s ºÍ %s Ö®¼äµÄ¾àÀëÊÇ: %.3f km\n', sat1, sat2, dist_at_t);
+       
+    % »æÖÆÄú¸Õ¸Õ¼ÆËãµÄÌØ¶¨µã
+    figure; % ´´½¨Ò»¸öĞÂÍ¼´°
+	plot(t_specific, distance_km, 'r*', 'MarkerSize', 10, 'DisplayName', 'ÌØ¶¨Ê±¿Ì');
+	hold on;
+    legend;
+    xlabel('Time');
+    ylabel('Distance (km)');
+    title('ÌØ¶¨Ê±¿ÌµÄÎÀĞÇ¾àÀë');
     grid on;
+	hold off;
+    
+catch ME
+    disp(['¼ÆËã¾àÀëÊ±³ö´í: ', ME.message]);
+    disp('ÇëÈ·±£ÎÀĞÇÃû³ÆÕıÈ·,²¢ÇÒ +module/paperfunction.m ÒÑÔÚ MATLAB Â·¾¶ÖĞ¡£');
+end
+
+    % ========================================
+    % 5. »æÖÆ¾àÀë±ä»¯Í¼
+    % ========================================
+%     figure;
+%     plot(time_vec, distance_km);
+%     title(['¾àÀë: ', satName1, ' to ', satName2], 'Interpreter', 'none');
+%     xlabel('Ê±¼ä (UTC)');
+%     ylabel('¾àÀë (km)');  % ·ùÖµµ¥Î»Í¨³£ÊÇ km
+%     grid on;
     
     % ========================================
-    % 6. (å¯é€‰) ä¿å­˜æ•°æ®åˆ°æ–‡ä»¶
+    % 6. (¿ÉÑ¡) ±£´æÊı¾İµ½ÎÄ¼ş
     % ========================================
-    % å®šä¹‰ä¿å­˜è·¯å¾„
-    % save_path = 'C:\temp\distance_output.txt'; % è¯·ä¿®æ”¹ä¸ºæ‚¨å¸Œæœ›çš„è·¯å¾„
+    % ¶¨Òå±£´æÂ·¾¶
+    % save_path = 'C:\temp\distance_output.txt'; % ÇëĞŞ¸ÄÎªÄúÏ£ÍûµÄÂ·¾¶
     % 
-    % % æ£€æŸ¥ç›®å½•æ˜¯å¦å­˜åœ¨
+    % % ¼ì²éÄ¿Â¼ÊÇ·ñ´æÔÚ
     % save_dir = fileparts(save_path);
     % if ~exist(save_dir, 'dir')
     %     mkdir(save_dir);
     % end
     % 
-    % % åˆ›å»ºè¡¨æ ¼å¹¶å†™å…¥æ–‡ä»¶
+    % % ´´½¨±í¸ñ²¢Ğ´ÈëÎÄ¼ş
     % data_table = table(time_vec, distance_km, 'VariableNames', {'Time', 'Range_km'});
     % writetable(data_table, save_path, 'Delimiter', '\t');
-    % disp(['æ•°æ®å·²ä¿å­˜åˆ°æ–‡ä»¶:', save_path]);
-    
-catch ME
-    disp(['è®¡ç®—è·ç¦»æ—¶å‡ºé”™: ', ME.message]);
-    disp('è¯·ç¡®ä¿å«æ˜Ÿåç§°æ­£ç¡®,å¹¶ä¸” +module/paperfunction.m å·²åœ¨ MATLAB è·¯å¾„ä¸­ã€‚');
-end
+    % disp(['Êı¾İÒÑ±£´æµ½ÎÄ¼ş:', save_path]);
 
-%% æ‰¹é‡é‡å‘½åå«æ˜Ÿå¹¶è®¾ç½®é¢œè‰²
-sat = module.sat();
-satellite_names = sat.getSatelliteNames(scenario);
-sat.batchRenameSatellitesInSTK2(root, satellite_names);  % å‡è®¾æ‚¨ä½¿ç”¨äº†è¿™ä¸ªé‡å‘½åå‡½æ•°
+% ÏÖÔÚÉèÖÃÌØ¶¨ÎÀĞÇµÄÑÕÉ«
+% module.setSatelliteColorRGB(root, 'qf_1', 255, 0, 0);  % ¼ÙÉèÎÀĞÇ±»ÖØÃüÃûÎª qf_1 (ºìÉ«)
+% setSatelliteColor(root, 'qf_2', 'green');            % ¼ÙÉèÎÀĞÇ±»ÖØÃüÃûÎª qf_2 (ÂÌÉ«)
 
-% ç°åœ¨è®¾ç½®ç‰¹å®šå«æ˜Ÿçš„é¢œè‰²
-module.setSatelliteColorRGB(root, 'qf_1', 255, 0, 0);  % å‡è®¾å«æ˜Ÿè¢«é‡å‘½åä¸º qf_1 (çº¢è‰²)
-setSatelliteColor(root, 'qf_2', 'green');              % å‡è®¾å«æ˜Ÿè¢«é‡å‘½åä¸º qf_2 (ç»¿è‰²)
