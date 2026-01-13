@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Walker Constellation (Custom Filename Support)</title>
+    <style>
+        /* --- 基础样式 --- */
+        body { margin: 0; background: #ffffff; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: #333; }
+        #canvas-container { width: 100vw; height: 100vh; cursor: grab; }
+        #canvas-container:active { cursor: grabbing; }
+
+        /* --- 侧边栏 --- */
+        #sidebar {
+            position: fixed; top: 0; left: 0; height: 100vh; width: 300px;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 2px 0 20px rgba(0,0,0,0.1); z-index: 100;
+            transform: translateX(0); transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+            display: flex; flex-direction: column; border-right: 1px solid #e1e4e8;
+        }
+        #sidebar.collapsed { transform: translateX(-100%); }
+        .sidebar-content { flex: 1; padding: 20px; overflow-y: auto; }
+
+        .sidebar-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-bottom: 15px; border-bottom: 2px solid #3498db; margin-bottom: 15px;
+        }
+        .sidebar-title { font-size: 18px; font-weight: bold; color: #2c3e50; margin: 0; }
+        .close-btn { background: none; border: none; font-size: 24px; color: #999; cursor: pointer; }
+
+        #toggle-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 101;
+            background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 8px 12px;
+            cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-size: 18px; color: #555;
+            transition: opacity 0.3s;
+        }
+        #sidebar:not(.collapsed) ~ #toggle-btn { opacity: 0; pointer-events: none; }
+
+        /* --- UI 组件 --- */
+        .config-box { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #e9ecef; }
+        .label { font-size: 11px; color: #7f8c8d; font-weight: bold; margin-bottom: 4px; display: block; }
+        .input-text {
+            width: 100%; box-sizing: border-box; font-family: 'Consolas', monospace; font-size: 12px;
+            padding: 6px; border: 1px solid #ced4da; border-radius: 4px; margin-bottom: 10px;
+            background: #fff; color: #333;
+        }
+
+        .btn-row { display: flex; gap: 8px; margin-bottom: 15px; }
+        button.action-btn { flex: 1; padding: 8px 0; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 12px; transition: 0.2s; }
+        .btn-blue { background: #3498db; color: white; } .btn-blue:hover { background: #2980b9; }
+        .btn-green { background: #27ae60; color: white; } .btn-green:hover { background: #219150; }
+        .btn-gray { background: #95a5a6; color: white; } .btn-gray:hover { background: #7f8c8d; }
+        .btn-search { background: #6c5ce7; color: white; } .btn-search:hover { background: #5649b8; }
+
+        .time-display {
+            background: #2c3e50; color: #00ff00; padding: 10px; text-align: center; border-radius: 4px;
+            font-weight: bold; font-family: 'Consolas', monospace; font-size: 13px; margin-bottom: 5px;
+            border: 1px solid #1a252f;
+        }
+
+        .progress-container { margin-bottom: 15px; padding: 0 2px; }
+        input[type=range] { width: 100%; -webkit-appearance: none; background: transparent; cursor: pointer; }
+
+        .info-row { font-size: 13px; margin-bottom: 6px; color: #666; }
+        .legend-item { display: flex; align-items: center; margin-top: 8px; font-size: 12px; color: #555; }
+        .line-mark { width: 24px; height: 3px; margin-right: 10px; border-radius: 2px; }
+        .gs-mark { width: 0; height: 0; margin-right: 10px; margin-left: 8px; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 10px solid #e74c3c; }
+
+        .upload-area { border-top: 1px dashed #ccc; padding-top: 15px; margin-top: 5px; }
+        input[type="file"] { font-size: 11px; width: 100%; margin-top: 5px; color: #555; }
+
+        .path-list { margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee; }
+        .path-step { padding: 4px 0; border-bottom: 1px dashed #f0f0f0; color: #555; font-size: 12px; }
+
+        #loading-status { font-size: 11px; color: #e67e22; margin-top: 5px; display: none; font-weight: bold; }
+
+        #tooltip {
+            position: absolute; display: none; background: rgba(0, 0, 0, 0.85); border: 1px solid #3498db;
+            color: #fff; padding: 6px 12px; border-radius: 4px; font-size: 12px; pointer-events: none; z-index: 200; white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <div class="sidebar-content">
+        <div class="sidebar-header">
+            <h2 class="sidebar-title">Walker Constellation</h2>
+            <button class="close-btn" onclick="toggleSidebar()">×</button>
+        </div>
+
+        <div class="label" style="color:#6c5ce7;">SEARCH SATELLITE</div>
+        <div class="config-box" style="display:flex; gap:5px; align-items: center;">
+            <input type="text" id="inpSearch" class="input-text" placeholder="ID (e.g. 100)" style="margin-bottom:0">
+            <button class="action-btn btn-search" onclick="doSearch()" style="flex: 0 0 50px;">Go</button>
+        </div>
+
+        <div class="label">TIME SETTINGS</div>
+        <div class="config-box">
+            <label class="label">Start Time:</label>
+            <input type="text" id="inpStart" class="input-text" value="27 Feb 2025 00:00:00.000">
+            <label class="label">Stop Time:</label>
+            <input type="text" id="inpStop" class="input-text" value="27 Feb 2025 01:00:00.000">
+            <button class="action-btn btn-gray" onclick="applyTimeSettings()" style="width:100%">Set / Reset</button>
+        </div>
+
+        <div class="time-display" id="timeDisplay">WAITING...</div>
+
+        <div class="progress-container">
+            <input type="range" id="timeSlider" min="0" value="0" step="1" oninput="handleSliderInput(this)">
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:#aaa; margin-top:2px; font-family:monospace;">
+                <span>Start</span>
+                <span>End</span>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button class="action-btn btn-blue" onclick="stepForward()">+5s Step</button>
+            <button class="action-btn btn-green" id="btnPlay" onclick="togglePlay()">Auto Play</button>
+        </div>
+
+        <div class="info-row">Planes: 72 | Sats: 22 (Total: 1584)</div>
+        <div class="info-row">Inc: 53° | Phase: 17</div>
+
+        <div class="legend-item"><div class="line-mark" style="background: #00a8ff;"></div>Intra-plane</div>
+        <div class="legend-item"><div class="line-mark" style="background: #ffa502;"></div>Inter-plane</div>
+        <div class="legend-item"><div class="line-mark" style="background: #d000ff; height:4px;"></div>Active Path</div>
+        <div class="legend-item"><div class="line-mark" style="background: #d000ff; border-top: 2px dashed #d000ff; height:0px;"></div>Sat-GS Link</div>
+        <div class="gs-mark"></div>Ground Station
+
+        <div class="upload-area">
+            <div class="label" style="color:#d000ff; font-size:12px;">LOAD ROUTE FOLDER:</div>
+            <input type="file" id="folderInput" webkitdirectory directory multiple onchange="handleFolderUpload(this)">
+            <div id="loading-status"></div>
+            <div style="font-size:10px; color:#999; margin-top:4px; word-break: break-all;">
+                Format: ..._Day_Mon_Year_H_M_S_Micro.csv<br>
+                e.g. Calculated_step0001_27_Feb_2025...
+            </div>
+        </div>
+
+        <div class="path-list" id="path-info">
+            <div style="color:#999; font-style:italic;">No path loaded...</div>
+        </div>
+    </div>
+</div>
+
+<button id="toggle-btn" onclick="toggleSidebar()">☰ Menu</button>
+<div id="tooltip"></div>
+<div id="canvas-container"><canvas id="topoCanvas"></canvas></div>
+
+<script>
+    function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+
+    // --- Physics ---
+    const P = 72, N = 22, F = 17;
+    const INC = 53 * (Math.PI / 180);
+    const Re = 6378.137, h = 550.0;
+    const mu = 398600.4418, a = Re + h;
+    const n_motion = Math.sqrt(mu / Math.pow(a, 3));
+    const we = 7.2921159e-5;
+
+    const groundStations = [
+        { name: 'Beijing_Source', latDeg: 39.9042, lonDeg: 116.4074 },
+        { name: 'Brasilia_Target', latDeg: -15.7975, lonDeg: -47.8919 }
+    ];
+    groundStations.forEach(gs => { gs.lat = gs.latDeg * Math.PI / 180; gs.lon = gs.lonDeg * Math.PI / 180; });
+
+    // --- Time & State ---
+    let startTimeObj = new Date();
+    let stopTimeObj = new Date();
+    let currentTimeObj = new Date();
+    let isPlaying = false, playInterval = null;
+    let viewState = { scale: 1, offsetX: 0, offsetY: 0, isDragging: false, lastX: 0, lastY: 0 };
+    let satellites = [], activePathIds = [], currentRouteGS = { source: null, target: null };
+    let searchedSatId = null;
+    let routeTimeline = [];
+
+    // --- Map Resources ---
+    const mapImage = new Image();
+    mapImage.src = './map.jpg';
+    mapImage.onload = () => draw();
+
+    const canvas = document.getElementById('topoCanvas');
+    const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
+    let width, height;
+
+    // --- Init ---
+    function init() {
+        resize();
+        applyTimeSettings();
+        document.getElementById('inpSearch').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') doSearch();
+        });
+    }
+
+    // --- Time Control ---
+    function parseDateString(str) {
+        const d = new Date(str.trim());
+        if (isNaN(d.getTime())) return null;
+        return d;
+    }
+
+    function applyTimeSettings() {
+        const sStr = document.getElementById('inpStart').value;
+        const eStr = document.getElementById('inpStop').value;
+        const s = parseDateString(sStr);
+        const e = parseDateString(eStr);
+        if (s && e) {
+            if (e <= s) { alert("Stop Time must be after Start Time"); return; }
+            startTimeObj = s; stopTimeObj = e;
+            currentTimeObj = new Date(startTimeObj.getTime());
+
+            const totalSec = (e - s) / 1000;
+            const slider = document.getElementById('timeSlider');
+            slider.max = totalSec;
+            slider.value = 0;
+            updateDisplay();
+        }
+    }
+
+    function updateDisplay() {
+        const div = document.getElementById('timeDisplay');
+        div.innerText = formatDate(currentTimeObj);
+        div.style.color = (currentTimeObj >= stopTimeObj) ? "#ff4444" : "#00ff00";
+        document.getElementById('timeSlider').value = (currentTimeObj - startTimeObj) / 1000;
+        updateSatellites();
+        updateRouteForCurrentTime();
+        draw();
+    }
+
+    function handleSliderInput(slider) {
+        currentTimeObj = new Date(startTimeObj.getTime() + parseFloat(slider.value) * 1000);
+        updateDisplay();
+    }
+
+    function formatDate(date) {
+        const d = date.getDate().toString().padStart(2,'0');
+        const m = date.toLocaleString('en-US',{month:'short'});
+        const y = date.getFullYear();
+        const hh = date.getHours().toString().padStart(2,'0');
+        const mm = date.getMinutes().toString().padStart(2,'0');
+        const ss = date.getSeconds().toString().padStart(2,'0');
+        return `${d} ${m} ${y} ${hh}:${mm}:${ss}`;
+    }
+
+    // --- FOLDER & FILE PARSING ---
+
+    async function handleFolderUpload(input) {
+        const files = Array.from(input.files);
+        const statusDiv = document.getElementById('loading-status');
+        const csvFiles = files.filter(f => f.name.toLowerCase().endsWith('.csv'));
+        if (csvFiles.length === 0) { alert("No CSV files found."); return; }
+
+        statusDiv.style.display = 'block';
+        statusDiv.innerText = `Parsing ${csvFiles.length} files...`;
+
+        routeTimeline = [];
+
+        const promises = csvFiles.map(file => {
+            return new Promise((resolve) => {
+                // 1. 先尝试解析文件名获取时间
+                const fileTime = extractTimeFromFilename(file.name);
+
+                if (fileTime) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const parsedData = parseCSVContent(e.target.result);
+                        if (parsedData) {
+                            resolve({
+                                timestamp: fileTime.getTime(),
+                                ...parsedData,
+                                fileName: file.name
+                            });
+                        } else resolve(null);
+                    };
+                    reader.readAsText(file);
+                } else {
+                    console.warn("Date parse failed for:", file.name);
+                    resolve(null);
+                }
+            });
+        });
+
+        const results = await Promise.all(promises);
+        routeTimeline = results.filter(r => r !== null).sort((a, b) => a.timestamp - b.timestamp);
+
+        statusDiv.innerText = `Loaded ${routeTimeline.length} valid files.`;
+        setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
+        updateRouteForCurrentTime();
+    }
+
+    // --- 核心修改：针对特定格式的文件名解析 ---
+    function extractTimeFromFilename(filename) {
+        // 目标格式: ..._step_时间步_日_月_年_时_分_秒_微秒.csv
+        // 例子: Calculated_step0001_27_Feb_2025_00_00_00_000000000.csv
+
+        // Regex 解释:
+        // _(\d{1,2}) -> 匹配 _日 (1-2位数字)
+        // _([A-Za-z]{3}) -> 匹配 _月 (3个字母, e.g. Feb)
+        // _(\d{4}) -> 匹配 _年 (4位数字)
+        // _(\d{2})_(\d{2})_(\d{2}) -> 匹配 _时_分_秒
+        // _(\d+) -> 匹配 _微秒 (任意位数)
+        const regex = /_(\d{1,2})_([A-Za-z]{3})_(\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d+)/;
+        const match = filename.match(regex);
+
+        if (match) {
+            const day = parseInt(match[1]);
+            const monthStr = match[2]; // e.g. "Feb"
+            const year = parseInt(match[3]);
+            const hour = parseInt(match[4]);
+            const min = parseInt(match[5]);
+            const sec = parseInt(match[6]);
+            // JS Date只支持毫秒，取微秒字段的前3位
+            const msStr = match[7].substring(0, 3);
+            const ms = parseInt(msStr) || 0;
+
+            // 月份缩写映射表
+            const months = {
+                'Jan':0, 'Feb':1, 'Mar':2, 'Apr':3, 'May':4, 'Jun':5,
+                'Jul':6, 'Aug':7, 'Sep':8, 'Oct':9, 'Nov':10, 'Dec':11,
+                // 兼容全小写或全大写
+                'jan':0, 'feb':1, 'mar':2, 'apr':3, 'may':4, 'jun':5,
+                'jul':6, 'aug':7, 'sep':8, 'oct':9, 'nov':10, 'dec':11
+            };
+
+            const monthIndex = months[monthStr] !== undefined ? months[monthStr] : months[monthStr.substring(0,3)];
+
+            if (monthIndex !== undefined) {
+                return new Date(year, monthIndex, day, hour, min, sec, ms);
+            }
+        }
+        return null;
+    }
+
+    function parseCSVContent(csvText) {
+        const lines = csvText.split(/\r?\n/);
+        if (lines.length < 2) return null;
+
+        const headers = lines[0].split(',');
+        const pathIndex = headers.findIndex(h => h.trim() === 'Path');
+        const srcIndex = headers.findIndex(h => h.trim() === 'SourceGS');
+        const tgtIndex = headers.findIndex(h => h.trim() === 'TargetGS');
+
+        const dataRow = lines[1];
+        if (!dataRow) return null;
+        const cells = dataRow.split(',');
+
+        let rawPath = (pathIndex !== -1) ? cells[pathIndex] : null;
+        let sourceName = (srcIndex !== -1) ? cells[srcIndex].trim() : null;
+        let targetName = (tgtIndex !== -1) ? cells[tgtIndex].trim() : null;
+
+        if (!rawPath || !rawPath.includes('STARLINK_')) {
+            const match = dataRow.match(/(STARLINK_\d+( -> STARLINK_\d+)+)/);
+            if (match) rawPath = match[0];
+        }
+
+        if (!rawPath) return null;
+
+        const ids = [];
+        rawPath.replace(/['"]/g, '').split(' -> ').forEach(part => {
+            const idMatch = part.match(/STARLINK_(\d+)/);
+            if (idMatch) ids.push(parseInt(idMatch[1]));
+        });
+
+        return { ids: ids, source: sourceName, target: targetName, rawPath: rawPath };
+    }
+
+    function updateRouteForCurrentTime() {
+        if (routeTimeline.length === 0) return;
+        const currentTs = currentTimeObj.getTime();
+        let bestMatch = null;
+
+        for (let i = 0; i < routeTimeline.length; i++) {
+            if (routeTimeline[i].timestamp <= currentTs) {
+                bestMatch = routeTimeline[i];
+            } else break;
+        }
+
+        if (bestMatch) {
+            activePathIds = bestMatch.ids;
+            currentRouteGS.source = bestMatch.source;
+            currentRouteGS.target = bestMatch.target;
+            renderPathUI(bestMatch);
+        } else {
+            activePathIds = [];
+            renderPathUI(null);
+        }
+    }
+
+    function renderPathUI(routeData) {
+        const uiList = document.getElementById('path-info');
+        if(!routeData) {
+            uiList.innerHTML = '<div style="color:#999; font-style:italic;">No route data for this time...</div>';
+            return;
+        }
+        let html = `<div style="margin-bottom:4px; font-weight:bold; color:#333; font-size:11px;">File: ${routeData.fileName}</div>`;
+        html += `<div style="margin-bottom:8px; font-size:11px; color:#666;">Hops: ${routeData.ids.length - 1}</div>`;
+        if(routeData.source) html += `<div style="color:#d000ff; font-size:11px;">Source: ${routeData.source}</div>`;
+        routeData.ids.forEach((id, idx) => {
+            html += `<div class="path-step"><span style="display:inline-block; width:24px; color:#999; text-align:right; margin-right:5px;">${idx+1}.</span> STARLINK-${id}</div>`;
+        });
+        if(routeData.target) html += `<div style="color:#d000ff; font-size:11px; margin-top:5px;">Target: ${routeData.target}</div>`;
+        uiList.innerHTML = html;
+    }
+
+    // --- Draw System ---
+    function getGMST(date) {
+        const julianDate = date.getTime() / 86400000 + 2440587.5;
+        const D = julianDate - 2451545.0;
+        let gmstDeg = 280.46061837 + 360.98564736629 * D;
+        gmstDeg %= 360; if (gmstDeg < 0) gmstDeg += 360;
+        return gmstDeg * (Math.PI / 180) + 2.095;
+    }
+
+    function updateSatellites() {
+        const simTimeSeconds = (currentTimeObj.getTime() - startTimeObj.getTime()) / 1000;
+        const theta = getGMST(startTimeObj) + we * simTimeSeconds;
+
+        satellites = [];
+        const TotalSats = P * N;
+
+        for (let p = 0; p < P; p++) {
+            const raan_0 = (2 * Math.PI * p) / P;
+            const phaseOffset = (p * F * 2 * Math.PI) / TotalSats;
+
+            for (let s = 0; s < N; s++) {
+                const M_t = ((s * 2 * Math.PI / N) + phaseOffset) + n_motion * simTimeSeconds;
+                const x_orb = Math.cos(M_t), y_orb = Math.sin(M_t);
+                const X_eci = x_orb * Math.cos(raan_0) - y_orb * Math.cos(INC) * Math.sin(raan_0);
+                const Y_eci = x_orb * Math.sin(raan_0) + y_orb * Math.cos(INC) * Math.cos(raan_0);
+                const Z_eci = y_orb * Math.sin(INC);
+                const X_ecef = X_eci * Math.cos(theta) + Y_eci * Math.sin(theta);
+                const Y_ecef = -X_eci * Math.sin(theta) + Y_eci * Math.cos(theta);
+
+                satellites.push({ id: p * N + s + 1, p: p, n: s, lat: Math.asin(Z_eci), lon: Math.atan2(Y_ecef, X_ecef) });
+            }
+        }
+    }
+
+    function stepForward() {
+        const nextTime = currentTimeObj.getTime() + 5000;
+        if (nextTime > stopTimeObj.getTime()) { currentTimeObj = new Date(stopTimeObj.getTime()); updateDisplay(); if (isPlaying) togglePlay(); return; }
+        currentTimeObj = new Date(nextTime); updateDisplay();
+    }
+    function togglePlay() {
+        const btn = document.getElementById('btnPlay');
+        if (isPlaying) { clearInterval(playInterval); isPlaying = false; btn.textContent = "Auto Play"; btn.style.background = ""; }
+        else {
+            if (currentTimeObj >= stopTimeObj) currentTimeObj = new Date(startTimeObj);
+            playInterval = setInterval(stepForward, 100); isPlaying = true; btn.textContent = "Stop"; btn.style.background = "#e74c3c";
+        }
+    }
+    function doSearch() {
+        const val = document.getElementById('inpSearch').value.trim().match(/(\d+)/);
+        searchedSatId = val ? parseInt(val[1]) : null;
+        if (searchedSatId && !satellites.find(s => s.id === searchedSatId)) { alert(`Cannot find STARLINK-${searchedSatId}`); searchedSatId = null; }
+        draw();
+    }
+
+    const BASE_W = 2000, BASE_H = 1000;
+    function getScreenPos(lon, lat) {
+        return {
+            x: ((lon + Math.PI) / (2 * Math.PI) * BASE_W * viewState.scale) + viewState.offsetX,
+            y: ((Math.PI / 2 - lat) / Math.PI * BASE_H * viewState.scale) + viewState.offsetY
+        };
+    }
+    function drawLineSmart(p1, p2, color, width, isDash=false) {
+        const s1 = getScreenPos(p1.lon, p1.lat), s2 = getScreenPos(p2.lon, p2.lat);
+        const mapW = BASE_W * viewState.scale;
+        ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(isDash ? [5, 5] : []);
+        if (Math.abs(p1.lon - p2.lon) > Math.PI) {
+            if (s1.x < s2.x) { ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x - mapW, s2.y); ctx.moveTo(s2.x, s2.y); ctx.lineTo(s1.x + mapW, s1.y); }
+            else { ctx.moveTo(s2.x, s2.y); ctx.lineTo(s1.x - mapW, s1.y); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x + mapW, s2.y); }
+        } else { ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); }
+        ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    function draw() {
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, width, height);
+        const mapW = BASE_W * viewState.scale, mapH = BASE_H * viewState.scale;
+        if (mapImage.complete) {
+            ctx.save(); ctx.filter = 'grayscale(100%) invert(100%) opacity(0.4)';
+            ctx.drawImage(mapImage, viewState.offsetX, viewState.offsetY, mapW, mapH);
+            ctx.restore(); ctx.strokeStyle = "#eee"; ctx.lineWidth=1; ctx.strokeRect(viewState.offsetX, viewState.offsetY, mapW, mapH);
+        }
+
+        satellites.forEach(sat => drawLineSmart(sat, satellites[sat.p * N + (sat.n + 1) % N], "rgba(0, 86, 179, 0.1)", 1));
+
+        if (activePathIds.length > 0) {
+            if (currentRouteGS.source) {
+                const gs = groundStations.find(g => g.name === currentRouteGS.source), sat = satellites[activePathIds[0] - 1];
+                if (gs && sat) drawLineSmart(gs, sat, "#d000ff", 2, true);
+            }
+            for (let i = 0; i < activePathIds.length - 1; i++) {
+                const s1 = satellites[activePathIds[i] - 1], s2 = satellites[activePathIds[i+1] - 1];
+                if (s1 && s2) drawLineSmart(s1, s2, "#d000ff", 3);
+            }
+            if (currentRouteGS.target) {
+                const gs = groundStations.find(g => g.name === currentRouteGS.target), sat = satellites[activePathIds[activePathIds.length - 1] - 1];
+                if (gs && sat) drawLineSmart(sat, gs, "#d000ff", 2, true);
+            }
+        }
+
+        groundStations.forEach(gs => {
+            const pos = getScreenPos(gs.lon, gs.lat);
+            if (pos.x>-20 && pos.x<width+20 && pos.y>-20 && pos.y<height+20) {
+                ctx.beginPath(); ctx.moveTo(pos.x, pos.y-10); ctx.lineTo(pos.x-10, pos.y+10); ctx.lineTo(pos.x+10, pos.y+10); ctx.closePath();
+                ctx.fillStyle="#e74c3c"; ctx.fill();
+                ctx.fillStyle="#333"; ctx.font="bold 12px Arial"; ctx.fillText(gs.name, pos.x+12, pos.y+5);
+                gs.sx=pos.x; gs.sy=pos.y;
+            }
+        });
+
+        satellites.forEach(sat => {
+            const isActive = activePathIds.includes(sat.id);
+            const pos = getScreenPos(sat.lon, sat.lat);
+            if (pos.x>-10 && pos.x<width+10 && pos.y>-10 && pos.y<height+10) {
+                ctx.beginPath(); ctx.arc(pos.x, pos.y, isActive?6:3, 0, Math.PI*2);
+                ctx.fillStyle = isActive ? "#d000ff" : "#2c2e50"; ctx.fill();
+                if (isActive) { ctx.beginPath(); ctx.arc(pos.x, pos.y, 9, 0, Math.PI*2); ctx.strokeStyle="rgba(208,0,255,0.4)"; ctx.stroke(); }
+            }
+            sat.sx=pos.x; sat.sy=pos.y;
+        });
+
+        if (searchedSatId !== null) {
+            const t = satellites.find(s => s.id === searchedSatId);
+            if (t && t.sx) {
+                ctx.beginPath(); ctx.arc(t.sx, t.sy, 15, 0, Math.PI*2); ctx.strokeStyle="#6c5ce7"; ctx.lineWidth=3; ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(t.sx-20,t.sy); ctx.lineTo(t.sx+20,t.sy); ctx.moveTo(t.sx,t.sy-20); ctx.lineTo(t.sx,t.sy+20); ctx.lineWidth=2; ctx.stroke();
+            }
+        }
+        if (hoveredObj) {
+            ctx.beginPath();
+            if(hoveredObj.type === 'GS') { ctx.moveTo(hoveredObj.sx, hoveredObj.sy-14); ctx.lineTo(hoveredObj.sx-14, hoveredObj.sy+14); ctx.lineTo(hoveredObj.sx+14, hoveredObj.sy+14); ctx.closePath(); }
+            else { ctx.arc(hoveredObj.sx, hoveredObj.sy, 8, 0, Math.PI*2); }
+            ctx.strokeStyle = "#e74c3c"; ctx.lineWidth=2; ctx.stroke();
+        }
+    }
+
+    function resize() { width = window.innerWidth; height = window.innerHeight; canvas.width = width; canvas.height = height; if (currentTimeObj.getTime()===startTimeObj.getTime()) { viewState.offsetX=(width-BASE_W)/2; viewState.offsetY=(height-BASE_H)/2; } draw(); }
+    window.addEventListener('resize', resize);
+
+    canvas.addEventListener('mousedown', e => { viewState.isDragging=true; viewState.lastX=e.clientX; viewState.lastY=e.clientY; canvas.style.cursor='grabbing'; });
+    window.addEventListener('mouseup', () => { viewState.isDragging=false; canvas.style.cursor='grab'; });
+    canvas.addEventListener('mousemove', e => {
+        if (viewState.isDragging) { viewState.offsetX+=e.clientX-viewState.lastX; viewState.offsetY+=e.clientY-viewState.lastY; viewState.lastX=e.clientX; viewState.lastY=e.clientY; }
+        let found = null;
+        for (let gs of groundStations) { if(gs.sx && Math.hypot(e.clientX-gs.sx, e.clientY-gs.sy)<15) { found={type:'GS',...gs}; break; } }
+        if (!found) for (let s of satellites) { if(s.sx && Math.hypot(e.clientX-s.sx, e.clientY-s.sy)<10) { found={type:'SAT',...s}; break; } }
+        if (found) { hoveredObj = found; tooltip.style.display='block'; tooltip.style.left=(e.clientX+15)+'px'; tooltip.style.top=(e.clientY+15)+'px';
+            tooltip.innerHTML = (found.type==='GS') ? `<strong>${found.name}</strong><br>Lon: ${found.lonDeg.toFixed(2)}` : `<strong>SAT-${found.id}</strong><br>P:${found.p} N:${found.n}`;
+        } else { hoveredObj=null; tooltip.style.display='none'; }
+        draw();
+    });
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault(); const factor = Math.exp(e.deltaY < 0 ? 0.1 : -0.1), newScale = viewState.scale * factor;
+        if(newScale > 50 || newScale < 0.1) return;
+        viewState.offsetX -= (e.clientX - viewState.offsetX) * (factor - 1); viewState.offsetY -= (e.clientY - viewState.offsetY) * (factor - 1); viewState.scale = newScale; draw();
+    }, { passive: false });
+
+    init();
+</script>
+</body>
+</html>

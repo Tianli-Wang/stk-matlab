@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Walker Constellation (Searchable & Connected)</title>
+    <style>
+        /* --- 基础样式 (亮色) --- */
+        body { margin: 0; background: #ffffff; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: #333; }
+
+        #canvas-container {
+            width: 100vw; height: 100vh; cursor: grab;
+        }
+        #canvas-container:active { cursor: grabbing; }
+
+        /* --- 侧边栏 (亮色) --- */
+        #sidebar {
+            position: fixed; top: 0; left: 0; height: 100vh; width: 300px;
+            background: rgba(255, 255, 255, 0.96); /* 白底 */
+            box-shadow: 2px 0 20px rgba(0,0,0,0.1); z-index: 100;
+            transform: translateX(0); transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+            display: flex; flex-direction: column; border-right: 1px solid #e1e4e8;
+        }
+        #sidebar.collapsed { transform: translateX(-100%); }
+        .sidebar-content { flex: 1; padding: 20px; overflow-y: auto; }
+
+        /* 头部 */
+        .sidebar-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-bottom: 15px; border-bottom: 2px solid #3498db; margin-bottom: 15px;
+        }
+        .sidebar-title { font-size: 18px; font-weight: bold; color: #2c3e50; margin: 0; }
+        .close-btn { background: none; border: none; font-size: 24px; color: #999; cursor: pointer; padding: 0 5px; }
+        .close-btn:hover { color: #e74c3c; }
+
+        /* 外部菜单按钮 */
+        #toggle-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 101;
+            background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 8px 12px;
+            cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-size: 18px; color: #555;
+            transition: opacity 0.3s;
+        }
+        #sidebar:not(.collapsed) ~ #toggle-btn { opacity: 0; pointer-events: none; }
+
+        /* --- UI 组件 (亮色适配) --- */
+        .config-box { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #e9ecef; }
+        .label { font-size: 11px; color: #7f8c8d; font-weight: bold; margin-bottom: 4px; display: block; }
+        .input-text {
+            width: 100%; box-sizing: border-box; font-family: 'Consolas', monospace; font-size: 12px;
+            padding: 6px; border: 1px solid #ced4da; border-radius: 4px; margin-bottom: 10px;
+            background: #fff; color: #333;
+        }
+
+        .btn-row { display: flex; gap: 8px; margin-bottom: 15px; }
+        button.action-btn { flex: 1; padding: 8px 0; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 12px; transition: 0.2s; }
+        .btn-blue { background: #3498db; color: white; } .btn-blue:hover { background: #2980b9; }
+        .btn-green { background: #27ae60; color: white; } .btn-green:hover { background: #219150; }
+        .btn-gray { background: #95a5a6; color: white; } .btn-gray:hover { background: #7f8c8d; }
+        .btn-search { background: #6c5ce7; color: white; } .btn-search:hover { background: #5649b8; }
+
+        .time-display {
+            background: #2c3e50; color: #00ff00; padding: 10px; text-align: center; border-radius: 4px;
+            font-weight: bold; font-family: 'Consolas', monospace; font-size: 13px; margin-bottom: 5px;
+            border: 1px solid #1a252f;
+        }
+
+        /* 进度条 */
+        .progress-container { margin-bottom: 15px; padding: 0 2px; }
+        input[type=range] { width: 100%; -webkit-appearance: none; background: transparent; cursor: pointer; }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #dfe6e9; border-radius: 3px; }
+        input[type=range]::-webkit-slider-thumb {
+            height: 16px; width: 16px; border-radius: 50%; background: #3498db;
+            -webkit-appearance: none; margin-top: -5px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        .info-row { font-size: 13px; margin-bottom: 6px; color: #666; }
+        .legend-item { display: flex; align-items: center; margin-top: 8px; font-size: 12px; color: #555; }
+        .line-mark { width: 24px; height: 3px; margin-right: 10px; border-radius: 2px; }
+        .gs-mark {
+            width: 0; height: 0; margin-right: 10px; margin-left: 8px;
+            border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 10px solid #e74c3c;
+        }
+
+        .upload-area { border-top: 1px dashed #ccc; padding-top: 15px; margin-top: 5px; }
+        input[type="file"] { font-size: 11px; width: 100%; margin-top: 5px; color: #555; }
+        .path-list { margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee; }
+        .path-step { padding: 4px 0; border-bottom: 1px dashed #f0f0f0; color: #555; font-size: 12px; }
+
+        #tooltip {
+            position: absolute; display: none; background: rgba(0, 0, 0, 0.85); border: 1px solid #3498db;
+            color: #fff; padding: 6px 12px; border-radius: 4px; font-size: 12px; pointer-events: none; z-index: 200; white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <div class="sidebar-content">
+        <div class="sidebar-header">
+            <h2 class="sidebar-title">Walker Constellation</h2>
+            <button class="close-btn" onclick="toggleSidebar()">×</button>
+        </div>
+
+        <div class="label" style="color:#6c5ce7;">SEARCH SATELLITE</div>
+        <div class="config-box" style="display:flex; gap:5px; align-items: center;">
+            <input type="text" id="inpSearch" class="input-text" placeholder="ID (e.g. 100)" style="margin-bottom:0">
+            <button class="action-btn btn-search" onclick="doSearch()" style="flex: 0 0 50px;">Go</button>
+        </div>
+
+        <div class="label">TIME SETTINGS</div>
+        <div class="config-box">
+            <label class="label">Start Time:</label>
+            <input type="text" id="inpStart" class="input-text" value="27 Feb 2025 00:00:00.000">
+            <label class="label">Stop Time:</label>
+            <input type="text" id="inpStop" class="input-text" value="27 Feb 2025 01:00:00.000">
+            <button class="action-btn btn-gray" onclick="applyTimeSettings()" style="width:100%">Set / Reset</button>
+        </div>
+
+        <div class="time-display" id="timeDisplay">WAITING...</div>
+
+        <div class="progress-container">
+            <input type="range" id="timeSlider" min="0" value="0" step="1" oninput="handleSliderInput(this)">
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:#aaa; margin-top:2px; font-family:monospace;">
+                <span>Start</span>
+                <span>End</span>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button class="action-btn btn-blue" onclick="stepForward()">+5s Step</button>
+            <button class="action-btn btn-green" id="btnPlay" onclick="togglePlay()">Auto Play</button>
+        </div>
+
+        <div class="info-row">Planes: 72 | Sats: 22 (Total: 1584)</div>
+        <div class="info-row">Inc: 53° | Phase: 17</div>
+
+        <div class="legend-item"><div class="line-mark" style="background: #00a8ff;"></div>Intra-plane</div>
+        <div class="legend-item"><div class="line-mark" style="background: #ffa502;"></div>Inter-plane</div>
+        <div class="legend-item"><div class="line-mark" style="background: #d000ff; height:4px;"></div>Active Path</div>
+        <div class="legend-item"><div class="line-mark" style="background: #d000ff; border-top: 2px dashed #d000ff; height:0px;"></div>Sat-GS Link</div>
+        <div class="legend-item"><div class="line-mark" style="background: #6c5ce7; height:4px;"></div>Target Sat</div>
+        <div class="legend-item"><div class="gs-mark"></div>Ground Station</div>
+
+        <div class="upload-area">
+            <div class="label" style="color:#d000ff; font-size:12px;">LOAD ROUTE CSV:</div>
+            <input type="file" id="csvInput" accept=".csv" onchange="handleFileUpload(this)">
+        </div>
+
+        <div class="path-list" id="path-info">
+            <div style="color:#999; font-style:italic;">No path loaded...</div>
+        </div>
+    </div>
+</div>
+
+<button id="toggle-btn" onclick="toggleSidebar()">☰ Menu</button>
+<div id="tooltip"></div>
+<div id="canvas-container"><canvas id="topoCanvas"></canvas></div>
+
+<script>
+    function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+
+    // --- Physics & Constellation Parameters ---
+    const P = 72;
+    const N = 22;
+    const F = 17;
+
+    const INC = 53 * (Math.PI / 180);
+    const Re = 6378.137, h = 550.0;
+    const mu = 398600.4418, a = Re + h;
+    const n_motion = Math.sqrt(mu / Math.pow(a, 3));
+    const we = 7.2921159e-5;
+
+    // --- Ground Stations ---
+    const groundStations = [
+        { name: 'Beijing_Source', latDeg: 39.9042, lonDeg: 116.4074 },
+        { name: 'Brasilia_Target', latDeg: -15.7975, lonDeg: -47.8919 }
+    ];
+    groundStations.forEach(gs => {
+        gs.lat = gs.latDeg * Math.PI / 180;
+        gs.lon = gs.lonDeg * Math.PI / 180;
+    });
+
+    // --- Time & State ---
+    let startTimeObj = new Date();
+    let stopTimeObj = new Date();
+    let currentTimeObj = new Date();
+    let isPlaying = false, playInterval = null;
+    let viewState = { scale: 1, offsetX: 0, offsetY: 0, isDragging: false, lastX: 0, lastY: 0 };
+    let satellites = [], activePathIds = [];
+
+    // NEW: 路由相关的地面站信息
+    let currentRouteGS = { source: null, target: null };
+    // 搜索状态
+    let searchedSatId = null;
+
+    // --- Map Resources ---
+    const mapImage = new Image();
+    mapImage.src = './map.jpg'; // 请确保目录下有 map.jpg
+    // 备用在线图源
+    // mapImage.src = 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/World_map_blank_without_borders.svg/2000px-World_map_blank_without_borders.svg.png';
+    mapImage.onload = () => draw();
+
+    const canvas = document.getElementById('topoCanvas');
+    const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
+    let width, height;
+
+    // --- Logic ---
+    function init() {
+        resize();
+        applyTimeSettings();
+
+        // 绑定回车键搜索
+        document.getElementById('inpSearch').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') doSearch();
+        });
+    }
+
+    function parseDateString(str) {
+        const d = new Date(str.trim());
+        if (isNaN(d.getTime())) { alert("Invalid Format!"); return null; }
+        return d;
+    }
+
+    function applyTimeSettings() {
+        const sStr = document.getElementById('inpStart').value;
+        const eStr = document.getElementById('inpStop').value;
+        const s = parseDateString(sStr);
+        const e = parseDateString(eStr);
+        if (s && e) {
+            if (e <= s) { alert("Stop Time must be after Start Time"); return; }
+            startTimeObj = s; stopTimeObj = e;
+            currentTimeObj = new Date(startTimeObj.getTime());
+
+            const totalSec = (e - s) / 1000;
+            const slider = document.getElementById('timeSlider');
+            slider.max = totalSec;
+            slider.value = 0;
+
+            updateDisplay(); updateSatellites(); draw();
+            if (isPlaying) togglePlay();
+        }
+    }
+
+    function updateDisplay() {
+        const div = document.getElementById('timeDisplay');
+        div.innerText = formatDate(currentTimeObj);
+        if (currentTimeObj >= stopTimeObj) div.style.color = "#ff4444";
+        else div.style.color = "#00ff00";
+
+        const currentElapsed = (currentTimeObj - startTimeObj) / 1000;
+        const slider = document.getElementById('timeSlider');
+        slider.value = currentElapsed;
+    }
+
+    function handleSliderInput(slider) {
+        const seconds = parseFloat(slider.value);
+        currentTimeObj = new Date(startTimeObj.getTime() + seconds * 1000);
+        updateDisplay(); updateSatellites(); draw();
+    }
+
+    function formatDate(date) {
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = date.toLocaleString('en-US', { month: 'short' });
+        const year = date.getFullYear();
+        const h = date.getHours().toString().padStart(2, '0');
+        const m = date.getMinutes().toString().padStart(2, '0');
+        const s = date.getSeconds().toString().padStart(2, '0');
+        return `${day} ${month} ${year} ${h}:${m}:${s}`;
+    }
+
+    function handleFileUpload(input) {
+        const file = input.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) { parseCSV(e.target.result); };
+        reader.readAsText(file);
+    }
+
+    // --- 增强版 CSV 解析 ---
+    function parseCSV(csvText) {
+        const lines = csvText.split(/\r?\n/); if (lines.length < 2) return;
+        const headers = lines[0].split(',');
+
+        // 查找各列索引
+        const pathIndex = headers.findIndex(h => h.trim() === 'Path');
+        const sourceGSIndex = headers.findIndex(h => h.trim() === 'SourceGS');
+        const targetGSIndex = headers.findIndex(h => h.trim() === 'TargetGS');
+
+        if (pathIndex === -1) { alert("Column 'Path' not found"); return; }
+
+        const dataRow = lines[1]; if (!dataRow) return;
+        const cells = dataRow.split(',');
+
+        // 提取数据
+        let rawPath = cells[pathIndex];
+        let sourceName = (sourceGSIndex !== -1) ? cells[sourceGSIndex].trim() : null;
+        let targetName = (targetGSIndex !== -1) ? cells[targetGSIndex].trim() : null;
+
+        // 容错处理：如果在单元格分割后没找到路径，尝试整行匹配
+        if (!rawPath || !rawPath.includes('STARLINK_')) {
+            const match = dataRow.match(/(STARLINK_\d+( -> STARLINK_\d+)+)/);
+            if (match) rawPath = match[0];
+        }
+
+        if (rawPath) processPathString(rawPath, sourceName, targetName);
+    }
+
+    function processPathString(pathStr, sourceGSName, targetGSName) {
+        pathStr = pathStr.replace(/['"]/g, '');
+        const parts = pathStr.split(' -> ');
+        activePathIds = [];
+        const uiList = document.getElementById('path-info');
+
+        // 更新 UI
+        let htmlContent = `<div style="margin-bottom:8px; font-weight:bold; color:#333;">Hops: ${parts.length - 1}</div>`;
+
+        if(sourceGSName) htmlContent += `<div style="color:#d000ff; font-size:11px;">Source: ${sourceGSName}</div>`;
+
+        parts.forEach((part, index) => {
+            const idMatch = part.match(/STARLINK_(\d+)/);
+            if (idMatch) {
+                const id = parseInt(idMatch[1]);
+                activePathIds.push(id);
+                // 仅用于UI列表生成
+            }
+        });
+
+        // 生成列表项
+        activePathIds.forEach((id, index) => {
+            htmlContent += `<div class="path-step"><span style="display:inline-block; width:24px; color:#999; text-align:right; margin-right:5px;">${index+1}.</span> STARLINK-${id}</div>`;
+        });
+
+        if(targetGSName) htmlContent += `<div style="color:#d000ff; font-size:11px; margin-top:5px;">Target: ${targetGSName}</div>`;
+
+        uiList.innerHTML = htmlContent;
+
+        // 保存地面站信息供绘图使用
+        currentRouteGS.source = sourceGSName;
+        currentRouteGS.target = targetGSName;
+
+        draw();
+    }
+
+    // 搜索功能
+    function doSearch() {
+        const val = document.getElementById('inpSearch').value.trim();
+        if(!val) {
+            searchedSatId = null;
+            draw();
+            return;
+        }
+        const match = val.match(/(\d+)/);
+        if(match) {
+            const id = parseInt(match[1]);
+            const exists = satellites.find(s => s.id === id);
+            if(exists) {
+                searchedSatId = id;
+                draw();
+            } else {
+                alert(`Cannot find STARLINK-${id} in current constellation.`);
+            }
+        }
+    }
+
+    function getGMST(date) {
+        const offset = 2.095
+        const julianDate = date.getTime() / 86400000 + 2440587.5;
+        const D = julianDate - 2451545.0;
+        let gmstDeg = 280.46061837 + 360.98564736629 * D;
+        gmstDeg = gmstDeg % 360;
+        if (gmstDeg < 0) gmstDeg += 360;
+        return gmstDeg * (Math.PI / 180) + offset;
+    }
+
+    function updateSatellites() {
+        const dt_ms = currentTimeObj.getTime() - startTimeObj.getTime();
+        const simTimeSeconds = dt_ms / 1000;
+
+        const theta_0 = getGMST(startTimeObj);
+        const theta = theta_0 + we * simTimeSeconds;
+
+        satellites = [];
+        const TotalSats = P * N;
+
+        for (let p = 0; p < P; p++) {
+            const raan_0 = (2 * Math.PI * p) / P;
+            const phaseOffset = (p * F * 2 * Math.PI) / TotalSats;
+
+            for (let s = 0; s < N; s++) {
+                const M_0 = (s * 2 * Math.PI / N) + phaseOffset;
+                const M_t = M_0 + n_motion * simTimeSeconds;
+                const u = M_t;
+                const x_orb = Math.cos(u), y_orb = Math.sin(u);
+
+                const X_eci = x_orb * Math.cos(raan_0) - y_orb * Math.cos(INC) * Math.sin(raan_0);
+                const Y_eci = x_orb * Math.sin(raan_0) + y_orb * Math.cos(INC) * Math.cos(raan_0);
+                const Z_eci = y_orb * Math.sin(INC);
+
+                const X_ecef = X_eci * Math.cos(theta) + Y_eci * Math.sin(theta);
+                const Y_ecef = -X_eci * Math.sin(theta) + Y_eci * Math.cos(theta);
+
+                const lon = Math.atan2(Y_ecef, X_ecef);
+                const lat = Math.asin(Z_eci);
+
+                satellites.push({ id: p * N + s + 1, p: p, n: s, lat: lat, lon: lon });
+            }
+        }
+    }
+
+    function stepForward() {
+        const nextTime = currentTimeObj.getTime() + 5000;
+        if (nextTime > stopTimeObj.getTime()) {
+            currentTimeObj = new Date(stopTimeObj.getTime());
+            updateDisplay(); updateSatellites(); draw();
+            if (isPlaying) togglePlay(); return;
+        }
+        currentTimeObj = new Date(nextTime);
+        updateDisplay(); updateSatellites(); draw();
+    }
+
+    function togglePlay() {
+        const btn = document.getElementById('btnPlay');
+        if (isPlaying) {
+            clearInterval(playInterval); isPlaying = false;
+            btn.textContent = "Auto Play"; btn.style.background = "";
+        } else {
+            if (currentTimeObj.getTime() >= stopTimeObj.getTime()) currentTimeObj = new Date(startTimeObj.getTime());
+            playInterval = setInterval(stepForward, 50); isPlaying = true;
+            btn.textContent = "Stop"; btn.style.background = "#e74c3c";
+        }
+    }
+
+    // --- Drawing System ---
+    const BASE_W = 2000;
+    const BASE_H = 1000;
+
+    function getScreenPos(lon, lat) {
+        const normX = (lon + Math.PI) / (2 * Math.PI);
+        const normY = (Math.PI / 2 - lat) / Math.PI;
+        return {
+            x: (normX * BASE_W * viewState.scale) + viewState.offsetX,
+            y: (normY * BASE_H * viewState.scale) + viewState.offsetY
+        };
+    }
+
+    function drawLineSmart(p1, p2, color, width, isDash=false) {
+        const s1 = getScreenPos(p1.lon, p1.lat), s2 = getScreenPos(p2.lon, p2.lat);
+        const mapW = BASE_W * viewState.scale;
+        ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = width;
+        if(isDash) ctx.setLineDash([5, 5]); else ctx.setLineDash([]);
+        if (Math.abs(p1.lon - p2.lon) > Math.PI) {
+            if (s1.x < s2.x) { ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x - mapW, s2.y); ctx.moveTo(s2.x, s2.y); ctx.lineTo(s1.x + mapW, s1.y); }
+            else { ctx.moveTo(s2.x, s2.y); ctx.lineTo(s1.x - mapW, s1.y); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x + mapW, s2.y); }
+        } else { ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); }
+        ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    function draw() {
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, width, height);
+
+        const mapW = BASE_W * viewState.scale;
+        const mapH = BASE_H * viewState.scale;
+        const drawX = viewState.offsetX;
+        const drawY = viewState.offsetY;
+
+        if (mapImage.complete) {
+            ctx.save();
+            ctx.filter = 'grayscale(100%) invert(100%) opacity(0.4)';
+            ctx.drawImage(mapImage, drawX, drawY, mapW, mapH);
+            ctx.filter = 'none';
+            ctx.strokeStyle = "#eee"; ctx.lineWidth=1;
+            ctx.strokeRect(drawX, drawY, mapW, mapH);
+            ctx.restore();
+        }
+
+        // 画普通链路
+        satellites.forEach(sat => {
+            let nextN = (sat.n + 1) % N; drawLineSmart(sat, satellites[sat.p * N + nextN], "rgba(0, 86, 179, 0.2)", 1);
+        });
+
+        // 画激活的卫星间链路
+        if (activePathIds.length > 1) {
+            for (let i = 0; i < activePathIds.length - 1; i++) {
+                const sat1 = satellites[activePathIds[i] - 1], sat2 = satellites[activePathIds[i+1] - 1];
+                if (sat1 && sat2) drawLineSmart(sat1, sat2, "#d000ff", 3);
+            }
+        }
+
+        // --- NEW: 画地面站到卫星的链路 ---
+        if (activePathIds.length > 0) {
+            // 1. Source GS -> First Sat
+            if (currentRouteGS.source) {
+                const gs = groundStations.find(g => g.name === currentRouteGS.source);
+                // 注意：activePathIds 存的是 ID (1-based)，satellites数组是按ID顺序生成的
+                // 为了安全，我们用数组索引 activePathIds[0] - 1
+                const firstSat = satellites[activePathIds[0] - 1];
+                if (gs && firstSat) {
+                    // 使用虚线连接
+                    drawLineSmart(gs, firstSat, "#d000ff", 2, true);
+                }
+            }
+            // 2. Last Sat -> Target GS
+            if (currentRouteGS.target) {
+                const gs = groundStations.find(g => g.name === currentRouteGS.target);
+                const lastSat = satellites[activePathIds[activePathIds.length - 1] - 1];
+                if (gs && lastSat) {
+                    drawLineSmart(lastSat, gs, "#d000ff", 2, true);
+                }
+            }
+        }
+
+        // 画地面站
+        groundStations.forEach(gs => {
+            const pos = getScreenPos(gs.lon, gs.lat);
+            if (pos.x > -20 && pos.x < width+20 && pos.y > -20 && pos.y < height+20) {
+                ctx.beginPath();
+                const size = 10;
+                ctx.moveTo(pos.x, pos.y - size);
+                ctx.lineTo(pos.x - size, pos.y + size);
+                ctx.lineTo(pos.x + size, pos.y + size);
+                ctx.closePath();
+                ctx.fillStyle = "#e74c3c"; ctx.fill();
+                ctx.fillStyle = "#333"; ctx.font = "bold 12px Arial";
+                ctx.fillText(gs.name, pos.x + 12, pos.y + 5);
+                gs.sx = pos.x; gs.sy = pos.y;
+            }
+        });
+
+        // 画卫星节点
+        satellites.forEach(sat => {
+            let color = "#2c2e50", radius = 3, isPathNode = false;
+            if (activePathIds.includes(sat.id)) { color = "#d000ff"; radius = 6; isPathNode = true; }
+            const pos = getScreenPos(sat.lon, sat.lat);
+            if (pos.x > -10 && pos.x < width+10 && pos.y > -10 && pos.y < height+10) {
+                ctx.beginPath(); ctx.arc(pos.x, pos.y, radius, 0, Math.PI*2); ctx.fillStyle = color; ctx.fill();
+                if (isPathNode) { ctx.beginPath(); ctx.arc(pos.x, pos.y, radius + 3, 0, Math.PI*2); ctx.strokeStyle = "rgba(255, 200, 0, 0.6)"; ctx.stroke(); }
+            }
+            sat.sx = pos.x; sat.sy = pos.y;
+        });
+
+        // 搜索高亮
+        if (searchedSatId !== null) {
+            const targetSat = satellites.find(s => s.id === searchedSatId);
+            if (targetSat && targetSat.sx !== undefined) {
+                ctx.beginPath(); ctx.arc(targetSat.sx, targetSat.sy, 15, 0, Math.PI*2);
+                ctx.strokeStyle = "#6c5ce7"; ctx.lineWidth = 3; ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(targetSat.sx - 20, targetSat.sy); ctx.lineTo(targetSat.sx + 20, targetSat.sy);
+                ctx.moveTo(targetSat.sx, targetSat.sy - 20); ctx.lineTo(targetSat.sx, targetSat.sy + 20);
+                ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = "#6c5ce7"; ctx.font = "bold 14px Consolas";
+                ctx.fillText(`SAT-${searchedSatId}`, targetSat.sx + 20, targetSat.sy - 15);
+            }
+        }
+
+        // 鼠标悬停高亮
+        if (hoveredObj) {
+            ctx.beginPath();
+            if(hoveredObj.type === 'GS') {
+                const size = 14;
+                ctx.moveTo(hoveredObj.sx, hoveredObj.sy - size);
+                ctx.lineTo(hoveredObj.sx - size, hoveredObj.sy + size);
+                ctx.lineTo(hoveredObj.sx + size, hoveredObj.sy + size);
+                ctx.closePath();
+                ctx.strokeStyle = "#e74c3c"; ctx.lineWidth = 2; ctx.stroke();
+            } else {
+                ctx.arc(hoveredObj.sx, hoveredObj.sy, 8, 0, Math.PI*2);
+                ctx.strokeStyle = "#d000ff"; ctx.lineWidth = 2; ctx.stroke();
+            }
+        }
+    }
+
+    // --- Events ---
+    function resize() {
+        width = window.innerWidth; height = window.innerHeight; canvas.width = width; canvas.height = height;
+        if(currentTimeObj.getTime() === startTimeObj.getTime()) {
+            viewState.offsetX = (width - BASE_W) / 2;
+            viewState.offsetY = (height - BASE_H) / 2;
+        }
+        draw();
+    }
+    window.addEventListener('resize', resize);
+    canvas.addEventListener('mousedown', e => { viewState.isDragging = true; viewState.lastX = e.clientX; viewState.lastY = e.clientY; canvas.style.cursor = 'grabbing'; });
+    window.addEventListener('mouseup', () => { viewState.isDragging = false; canvas.style.cursor = 'grab'; });
+    canvas.addEventListener('mousemove', e => {
+        if (viewState.isDragging) { viewState.offsetX += e.clientX - viewState.lastX; viewState.offsetY += e.clientY - viewState.lastY; viewState.lastX = e.clientX; viewState.lastY = e.clientY; }
+        checkHover(e.clientX, e.clientY); draw();
+    });
+
+    // canvas.addEventListener('wheel', e => { e.preventDefault(); viewState.scale *= Math.exp(e.deltaY < 0 ? 0.1 : -0.1); draw(); }, { passive: false });
+    // 鼠标为中心缩放：NewOffset = OldOffset - (MousePos - OldOffset) \times (ZoomFactor - 1)
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+
+        // 1. 计算缩放因子 (Zoom Factor)
+        const zoomIntensity = 0.1; // 灵敏度
+        const zoomFactor = Math.exp(e.deltaY < 0 ? zoomIntensity : -zoomIntensity);
+
+        // 2. 计算新的 Scale
+        const newScale = viewState.scale * zoomFactor;
+
+        // 3. 限制缩放范围 (防止无穷大或无穷小)
+        if (newScale > 50 || newScale < 0.1) return;
+
+        // 4. 核心算法：调整 Offset 以保持鼠标下的点不动
+        // 鼠标相对于当前视图原点的距离
+        const mouseRelX = e.clientX - viewState.offsetX;
+        const mouseRelY = e.clientY - viewState.offsetY;
+
+        // 新的 Offset = 旧 Offset - 鼠标相对距离 * (缩放变化量)
+        viewState.offsetX -= mouseRelX * (zoomFactor - 1);
+        viewState.offsetY -= mouseRelY * (zoomFactor - 1);
+
+        // 5. 应用新的 Scale
+        viewState.scale = newScale;
+
+        draw();
+    }, { passive: false });
+
+
+    let hoveredObj = null;
+    function checkHover(mx, my) {
+        let minDist = 10, found = null;
+        for (let gs of groundStations) {
+            if (gs.sx === undefined) continue;
+            const dist = Math.sqrt((mx-gs.sx)**2 + (my-gs.sy)**2);
+            if (dist < 15) { found = { type: 'GS', ...gs }; break; }
+        }
+        if (!found) {
+            for (let sat of satellites) {
+                const dist = Math.sqrt((mx-sat.sx)**2 + (my-sat.sy)**2);
+                if (dist < minDist) { minDist = dist; found = { type: 'SAT', ...sat }; }
+            }
+        }
+        if (found) {
+            hoveredObj = found;
+            tooltip.style.display = 'block'; tooltip.style.left = (mx + 15) + 'px'; tooltip.style.top = (my + 15) + 'px';
+            if (found.type === 'GS') {
+                tooltip.innerHTML = `<strong>Ground Station</strong><br>${found.name}<br>Lon: ${found.lonDeg.toFixed(2)}°, Lat: ${found.latDeg.toFixed(2)}°`;
+            } else {
+                tooltip.innerHTML = `<strong>STARLINK-${found.id}</strong><br>P:${found.p}, N:${found.n}<br>Lon: ${(found.lon*180/Math.PI).toFixed(1)}°, Lat: ${(found.lat*180/Math.PI).toFixed(1)}°`;
+            }
+        } else { hoveredObj = null; tooltip.style.display = 'none'; }
+    }
+
+    init();
+</script>
+</body>
+</html>

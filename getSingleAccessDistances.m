@@ -28,8 +28,8 @@ catch ME
 end
 
 %% 星座参数设置
-P = 24;  % 轨道平面数量
-N = 66;  % 每个平面的卫星数量
+P = 10;  % 轨道平面数量
+N = 10;  % 每个平面的卫星数量
 % P = 3;
 % N = 36;
 
@@ -40,7 +40,7 @@ for i = 1:P
     % 1. 设置"种子卫星"参数
     % ========================================
     % 为了区分不同循环生成的卫星,给种子卫星起一个带下标的名字
-    seedSatelliteName = sprintf('QF_%d', i);
+    seedSatelliteName = sprintf('STARLINK_%d', i);
     
     % 轨道与初始状态参数
     params = struct();

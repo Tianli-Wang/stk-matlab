@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Walker Constellation Grid Mesh Visualization</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        body, html { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #000; }
+        #cesiumContainer { width: 100%; height: 100%; }
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 20, 40, 0.8);
+            border: 1px solid #00aaff;
+            padding: 15px;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            z-index: 100;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
+        }
+        h3 { margin-top: 0; color: #00aaff; }
+        .param-row { margin-bottom: 5px; }
+        button {
+            background: #00aaff; border: none; padding: 5px 15px; color: white; cursor: pointer; margin-top: 10px; width: 100%;
+        }
+        button:hover { background: #0088cc; }
+    </style>
+</head>
+<body>
+
+<div id="ui-panel">
+    <h3>Walker 星座参数 (i: T/P/F)</h3>
+    <div class="param-row">总星数 (T): <input type="number" id="totalSats" value="24" style="width:50px"></div>
+    <div class="param-row">轨道面 (P): <input type="number" id="planes" value="4" style="width:50px"></div>
+    <div class="param-row">相位因子 (F): <input type="number" id="phasing" value="1" style="width:50px"></div>
+    <div class="param-row">轨道高度 (km): <input type="number" id="altitude" value="1000" style="width:60px"></div>
+    <div class="param-row">轨道倾角 (deg): <input type="number" id="inclination" value="55" style="width:50px"></div>
+    <button onclick="generateConstellation()">生成 Grid Mesh</button>
+    <div style="font-size: 12px; margin-top: 10px; color: #aaa;">
+        * 蓝色: 卫星节点<br>
+        * 绿色线: 同轨链路<br>
+        * 黄色线: 异轨链路
+    </div>
+</div>
+
+<div id="cesiumContainer"></div>
+
+<script>
+    // 1. 初始化 Cesium Viewer
+    // 注意：实际生产中需要去 cesium.com 申请 Token，这里为了演示直接运行（可能会有默认Token警告）
+    const viewer = new Cesium.Viewer('cesiumContainer', {
+        imageryProvider: new Cesium.GridImageryProvider({
+            color: Cesium.Color.fromCssColorString('#004466'),
+            glowColor: Cesium.Color.fromCssColorString('#00aaff'),
+            tilingScheme: new Cesium.GeographicTilingScheme()
+        }),
+        baseLayerPicker: false,
+        geocoder: false,
+        homeButton: false,
+        infoBox: false,
+        sceneModePicker: false,
+        selectionIndicator: false,
+        timeline: false,
+        navigationHelpButton: false,
+        animation: false,
+        skyBox: false, // 关闭星空背景，营造纯黑科技感
+        contextOptions: {
+            webgl: { alpha: true }
+        }
+    });
+
+    // 设置背景色和地球透明度
+    viewer.scene.backgroundColor = Cesium.Color.BLACK;
+    viewer.scene.globe.baseColor = Cesium.Color.BLACK;
+    viewer.scene.globe.enableLighting = true;
+
+    // 存储当前的实体
+    let constellationEntities = [];
+
+    // 2. 核心算法：开普勒轨道转笛卡尔坐标 (简化版，假设圆轨道)
+    function getSatellitePosition(a, i_rad, RAAN_rad, u_rad) {
+        // a: 半长轴 (m)
+        // i: 倾角 (rad)
+        // RAAN: 升交点赤经 (rad)
+        // u: 纬度幅角 (rad) = argument of periapsis + true anomaly
+
+        // 在轨道平面内的坐标
+        const x_orb = a * Math.cos(u_rad);
+        const y_orb = a * Math.sin(u_rad);
+
+        // 旋转矩阵转换到 ECEF/ECI (这里简化视为惯性系某时刻快照)
+        // X = x_orb * (cos(RAAN)cos(u) - sin(RAAN)sin(u)cos(i)) ... 简化公式如下：
+
+        const X = x_orb * Math.cos(RAAN_rad) - y_orb * Math.cos(i_rad) * Math.sin(RAAN_rad);
+        const Y = x_orb * Math.sin(RAAN_rad) + y_orb * Math.cos(i_rad) * Math.cos(RAAN_rad);
+        const Z = y_orb * Math.sin(i_rad);
+
+        return new Cesium.Cartesian3(X, Y, Z);
+    }
+
+    // 3. Walker 星座生成逻辑
+    function generateConstellation() {
+        // 清除旧数据
+        const entities = viewer.entities;
+        const len = constellationEntities.length;
+        for(let k=0; k<len; k++){
+            entities.remove(constellationEntities[k]);
+        }
+        constellationEntities = [];
+
+        // 获取参数
+        const T = parseInt(document.getElementById('totalSats').value);
+        const P = parseInt(document.getElementById('planes').value);
+        const F = parseInt(document.getElementById('phasing').value);
+        const h = parseFloat(document.getElementById('altitude').value) * 1000; // km -> m
+        const i_deg = parseFloat(document.getElementById('inclination').value);
+
+        const Re = 6371000; // 地球半径
+        const a = Re + h;   // 轨道半长轴
+        const i_rad = Cesium.Math.toRadians(i_deg);
+
+        const s = T / P; // 每个面的卫星数
+
+        // Walker Delta 参数计算
+        // 升交点赤经间隔 (Delta RAAN)
+        const dRAAN = Cesium.Math.TWO_PI / P;
+        // 平近点角间隔 (Delta M)
+        const dM = Cesium.Math.TWO_PI / s;
+        // 相位差 (Delta Phi) = 2π * F / T
+        const dPhi = Cesium.Math.TWO_PI * F / T;
+
+        let satPositions = []; // 存储所有卫星位置以便连线
+
+        // --- 生成节点 (Mesh Nodes) ---
+        for (let p = 0; p < P; p++) {
+            let planeSats = [];
+            const RAAN = p * dRAAN;
+
+            for (let m = 0; m < s; m++) {
+                // Walker 相位公式: M = m * dM + p * dPhi
+                const M = m * dM + p * dPhi;
+
+                // 假设圆轨道，u (纬度幅角) = M
+                const pos = getSatellitePosition(a, i_rad, RAAN, M);
+
+                planeSats.push(pos);
+
+                // 添加卫星点
+                const entity = viewer.entities.add({
+                    position: pos,
+                    point: {
+                        pixelSize: 8,
+                        color: Cesium.Color.CYAN,
+                        outlineColor: Cesium.Color.BLACK,
+                        outlineWidth: 1
+                    }
+                });
+                constellationEntities.push(entity);
+            }
+            satPositions.push(planeSats);
+        }
+
+        // --- 生成网格连线 (Mesh Links) ---
+
+        // 1. 同轨道面链路 (Intra-plane ISL) - 绿色
+        for (let p = 0; p < P; p++) {
+            const sats = satPositions[p];
+            for (let m = 0; m < s; m++) {
+                const current = sats[m];
+                const next = sats[(m + 1) % s]; // 闭环
+
+                const link = viewer.entities.add({
+                    polyline: {
+                        positions: [current, next],
+                        width: 1,
+                        material: new Cesium.PolylineDashMaterialProperty({
+                            color: Cesium.Color.LIME.withAlpha(0.5)
+                        }),
+                        arcType: Cesium.ArcType.NONE // 直线连接，模拟激光链路
+                    }
+                });
+                constellationEntities.push(link);
+            }
+        }
+
+        // 2. 异轨道面链路 (Inter-plane ISL) - 黄色
+        // 简单策略：连接相邻轨道面中索引相同的卫星 (这是一个简化的拓扑，实际Walker网络更复杂)
+        for (let p = 0; p < P; p++) {
+            const nextP = (p + 1) % P;
+            // 简单的 +1 grid 拓扑
+            for (let m = 0; m < s; m++) {
+                const current = satPositions[p][m];
+
+                // 寻找相邻平面最近的卫星通常需要距离计算，这里简化为连接相同索引偏移
+                // 注意：Walker星座通常会有相位错开，所以简单的 m 对应 m 可能不是最近的
+                // 这里为了可视化 Mesh 效果，我们简单连接 m 和 m (可能连线会很长，取决于 F 参数)
+                const nextPlaneSat = satPositions[nextP][m];
+
+                const link = viewer.entities.add({
+                    polyline: {
+                        positions: [current, nextPlaneSat],
+                        width: 1,
+                        material: Cesium.Color.YELLOW.withAlpha(0.3),
+                        arcType: Cesium.ArcType.NONE
+                    }
+                });
+                constellationEntities.push(link);
+            }
+        }
+
+        viewer.zoomTo(viewer.entities);
+    }
+
+    // 初始运行一次
+    setTimeout(generateConstellation, 1000);
+
+</script>
+</body>
+</html>

@@ -270,14 +270,14 @@ end
 
 function newName = convertSatelliteName(oldName)
     % 转换卫星名称从 QF_1101 或 QF_11101 到 QF_i_j 格式
-    if ~startsWith(oldName, 'QF_')
-        error('Invalid satellite name format. Name must start with "QF_".');
+    if ~startsWith(oldName, 'STARLINK_')
+        error('Invalid satellite name format. Name must start with "STARLINK_".');
     end
 
     % 提取数字部分
     numPart = oldName(4:end); % 去掉 'QF_'
     if ~all(isstrprop(numPart, 'digit'))
-        error('Invalid satellite name format. The part after "QF_" must be numeric.');
+        error('Invalid satellite name format. The part after "STARLINK_" must be numeric.');
     end
 
     % 解析轨道编号 (i) 和卫星编号 (j)
@@ -319,7 +319,7 @@ function batchRenameSatellitesInSTK2(root, oldNames)
         
         % 使用 qf_i 生成新名称
 %         newName = sprintf('qf_%d_%d', mod(floor(i/10),10), mod(i, 10));  % 假设 qf_i 的格式为 'qf_1', 'qf_2' 等
-        newName = sprintf('QF_%d', i);  % 假设 qf_i 的格式为 'qf_1', 'qf_2' 等
+        newName = sprintf('STARLINK_%d', i);  % 假设 qf_i 的格式为 'qf_1', 'qf_2' 等
         
         % 修改 STK 中的名称
         try

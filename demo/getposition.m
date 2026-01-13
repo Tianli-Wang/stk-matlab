@@ -44,8 +44,8 @@ end
 %RAAN = 10.2
 
 
-N = 10
-P = 2
+N = 1
+P = 1
 RAAN = 180/10
 Anomaly_base = 4.5
 for i = 1:P
