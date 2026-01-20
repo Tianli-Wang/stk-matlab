@@ -11,25 +11,33 @@
 
 %% 0. 全局设置
 clear; clc;
-USE_ENGINE = 1;      % 1 = STK Engine (无界面，快); 0 = GUI (有界面)
-distance_limit = 3000; % 初始星间链路距离阈值 (km)
-time_step_val = 5;   % 时间步长 (秒)
+USE_ENGINE = 1;       % 1 = STK Engine (无界面，快); 0 = GUI (有界面)
+distance_limit = 500; % 初始星间链路距离阈值 (km)
+time_step_val = 5;    % 时间步长 (秒)
 
 % ================= [修改开始] 输出路径配置 =================
 % 1. 生成本次运行的唯一时间戳
-current_timestamp = datestr(now, 'yyyymmdd_HHMMSS');
+% current_timestamp = datestr(now, 'yyyymmdd_HHMMSS');
 
-% 2. 定义上级目录中的 OutputFiles 基础路径
-% fullfile('..', 'OutputFiles') 会自动处理 Windows/Linux 路径分隔符
-base_root = fullfile('..', 'OutputFiles');
+% 2. [关键修改] 定义绝对路径 (全局目录)
+% -----------------------------------------------------------
+% 请根据你的操作系统，将下面的路径修改为你实际想要存放的文件夹
+% Windows 示例: 'D:\Research\STK_Project\OutputFiles'
+% Linux/Mac 示例: '/home/user/data/stk_output'
+% -----------------------------------------------------------
+base_root = 'C:\Users\Tianl\Documents\PhD\Papers\second_paper\Algorith\OutputFiles'; 
 
 % 3. 定义本次仿真的总文件夹 (带时间戳)
-run_root_folder = fullfile(base_root, sprintf('RawData_%s', current_timestamp));
+run_root_folder = fullfile(base_root, sprintf('RawData'));
 
-% 确保总目录存在
+% 确保总目录存在 (如果 D盘 对应的文件夹不存在，Matlab会自动创建)
 if ~exist(run_root_folder, 'dir')
-    mkdir(run_root_folder);
-    fprintf('已创建本次仿真总目录: %s\n', run_root_folder);
+    try
+        mkdir(run_root_folder);
+        fprintf('已创建本次仿真总目录: %s\n', run_root_folder);
+    catch ME
+        error('无法创建输出目录，请检查盘符或权限。\n错误路径: %s\n错误信息: %s', run_root_folder, ME.message);
+    end
 end
 
 % 4. 定义当前参数的具体子文件夹
@@ -37,13 +45,15 @@ sub_folder_name = sprintf('Results_Step%ds_Limit%dkm', time_step_val, distance_l
 output_folder = fullfile(run_root_folder, sub_folder_name);
 % ================= [修改结束] =================
 
-% 创建具体的输出文件夹
-if ~exist(output_folder, 'dir')
-    mkdir(output_folder);
-    fprintf('已创建子输出文件夹: %s\n', output_folder);
-else
-    fprintf('输出文件夹已存在: %s\n', output_folder);
-end
+% 5. [关键修改] 定义 GS 和 Visibility 的分类文件夹
+gs_folder = fullfile(output_folder, 'GS_Datas');      % GS类文件存放处
+vis_folder = fullfile(output_folder, 'Visibility_Datas');  % Visibility类文件存放处
+
+% 创建分类文件夹
+if ~exist(gs_folder, 'dir'), mkdir(gs_folder); end
+if ~exist(vis_folder, 'dir'), mkdir(vis_folder); end
+
+fprintf('输出目录已准备:\n  GS数据: %s\n  链路数据: %s\n', gs_folder, vis_folder);
 
 %% 1. 初始化 STK
 if USE_ENGINE
@@ -99,7 +109,7 @@ N = 22;   % 每面卫星数 (Sats per plane)
 F = 17;   % 相位因子 (Phasing Parameter)
 
 % 测试模式开关
-isTestMode = true; 
+isTestMode = false; 
 if isTestMode
     P = 5; N = 22; % 测试用小规模
     fprintf('!!! 测试模式: 仅生成 %d 个平面 !!!\n', P);
@@ -311,7 +321,8 @@ for t_idx = 1:numTimeSteps
     % 保存地面站路由 CSV
     if ~strcmp(gs_results(1).SatName, "None") || ~strcmp(gs_results(2).SatName, "None")
         file_name_gs = sprintf('GS_Route_step%04d_%s.csv', t_idx, safe_time_str);
-        full_path_gs = fullfile(output_folder, file_name_gs);
+        
+        full_path_gs = fullfile(gs_folder, file_name_gs);
         
         T_GS = table(...
             string(GS_Defs(1).Name), string(gs_results(1).SatName), gs_results(1).Dist, ...
@@ -382,7 +393,7 @@ for t_idx = 1:numTimeSteps
             'VariableNames', {'Sat1', 'Sat2', 'Distance_km', 'AngularVelocity_rad_s'});
         
         file_name_isl = sprintf('visibility_step%04d_%s.csv', t_idx, safe_time_str);
-        full_path_isl = fullfile(output_folder, file_name_isl);
+        full_path_isl = fullfile(vis_folder, file_name_isl);
         
         writetable(T_table, full_path_isl);
         fprintf('链路: %d条, GS接入: [%s, %s] (耗时 %.2fs)\n', count, gs_results(1).SatName, gs_results(2).SatName, toc(step_timer));
@@ -401,21 +412,16 @@ fprintf('结果保存在: %s\n', output_folder);
 for i = 1:8
     distance_limit = i * 500;
     
-    % ================= [修改开始] =================
-    % 使用之前定义的 run_root_folder，确保都在同一个时间戳目录下
-    sub_folder_name = sprintf('Results_Step%ds_Limit%dkm', time_step_val, distance_limit);
-    output_folder = fullfile(run_root_folder, sub_folder_name);
-    % ================= [修改结束] =================
+   % 定义分类子文件夹
+    gs_folder = fullfile(output_folder, 'GS_Datas');
+    vis_folder = fullfile(output_folder, 'visibility_Datas');
 
-    % 创建输出文件夹
-    if ~exist(output_folder, 'dir')
-        mkdir(output_folder);
-        fprintf('已创建批量子文件夹: %s\n', output_folder);
-    else
-        fprintf('输出文件夹已存在: %s\n', output_folder);
-    end
-
-    fprintf('\n[阶段3] 开始批量循环计算 (Limit=%d km)...\n', distance_limit);
+    % 创建文件夹
+    if ~exist(gs_folder, 'dir'), mkdir(gs_folder); end
+    if ~exist(vis_folder, 'dir'), mkdir(vis_folder); end
+    
+    fprintf('\n[阶段3] 开始批量循环 (Limit=%d km)...\n', distance_limit);
+    fprintf('  数据将存入: %s 和 %s\n', gs_folder, vis_folder);
 
     % 准备并行索引 (同阶段2)
     totalPairs = numSats * (numSats - 1) / 2;
@@ -478,7 +484,7 @@ for i = 1:8
         
         if ~strcmp(gs_results(1).SatName, "None") || ~strcmp(gs_results(2).SatName, "None")
             file_name_gs = sprintf('GS_Route_step%04d_%s.csv', t_idx, safe_time_str);
-            full_path_gs = fullfile(output_folder, file_name_gs);
+            full_path_gs = fullfile(gs_folder, file_name_gs);
             T_GS = table(...
                 string(GS_Defs(1).Name), string(gs_results(1).SatName), gs_results(1).Dist, ...
                 string(GS_Defs(2).Name), string(gs_results(2).SatName), gs_results(2).Dist, ...
@@ -542,7 +548,7 @@ for i = 1:8
                 'VariableNames', {'Sat1', 'Sat2', 'Distance_km', 'AngularVelocity_rad_s'});
 
             file_name_isl = sprintf('visibility_step%04d_%s.csv', t_idx, safe_time_str);
-            full_path_isl = fullfile(output_folder, file_name_isl);
+            full_path_isl = fullfile(vis_folder, file_name_isl);
             writetable(T_table, full_path_isl);
             fprintf('链路: %d条, GS接入: [%s, %s] (耗时 %.2fs)\n', count, gs_results(1).SatName, gs_results(2).SatName, toc(step_timer));
         else
