@@ -12,7 +12,7 @@
 %% 0. 全局设置
 clear; clc;
 USE_ENGINE = 1;       % 1 = STK Engine (无界面，快); 0 = GUI (有界面)
-distance_limit = 500; % 初始星间链路距离阈值 (km)
+distance_limit = 2000; % 初始星间链路距离阈值 (km)
 time_step_val = 5;    % 时间步长 (秒)
 
 % ================= [修改开始] 输出路径配置 =================
@@ -25,7 +25,7 @@ time_step_val = 5;    % 时间步长 (秒)
 % Windows 示例: 'D:\Research\STK_Project\OutputFiles'
 % Linux/Mac 示例: '/home/user/data/stk_output'
 % -----------------------------------------------------------
-base_root = 'C:\Users\Tianl\Documents\PhD\Papers\second_paper\Algorith\OutputFiles'; 
+base_root = 'C:\Users\Tianl\Documents\PhD\Papers\second_paper\Algorith\OutputFiles_test'; 
 
 % 3. 定义本次仿真的总文件夹 (带时间戳)
 run_root_folder = fullfile(base_root, sprintf('RawData'));
@@ -250,12 +250,16 @@ fprintf('数据提取完成。共 %d 个时间步。\n', numTimeSteps);
 
 fprintf('\n[阶段2] 开始时间循环计算...\n');
 
-% 准备并行索引
-totalPairs = numSats * (numSats - 1) / 2;
+% 准备并行索引 (包含卫星与地面站)
+numGS = length(GS_Defs);
+totalNodes = numSats + numGS;
+allNodeNames = [string(satellite_names); string({GS_Defs.Name}')];
+
+totalPairs = totalNodes * (totalNodes - 1) / 2;
 pairIndices = zeros(totalPairs, 2);
 idx = 0;
-for i = 1:numSats
-    for j = (i+1):numSats
+for i = 1:totalNodes
+    for j = (i+1):totalNodes
         idx = idx + 1;
         pairIndices(idx, :) = [i, j];
     end
@@ -276,27 +280,35 @@ for t_idx = 1:numTimeSteps
     fprintf('处理时间步 %d/%d (%s)... ', t_idx, numTimeSteps, current_time_str);
     step_timer = tic;
     
-    % --- A. 组装当前时刻卫星位置和速度矩阵 ---
-    currentSatPositions = zeros(numSats, 3);
-    currentSatVelocities = zeros(numSats, 3); % <--- [新增]
+    % --- A. 组装当前时刻所有节点 (卫星+地面站) 的位置和速度矩阵 ---
+    allPositions = zeros(totalNodes, 3);
+    allVelocities = zeros(totalNodes, 3);
     
+    % 填充卫星数据
     for i = 1:numSats
         if ~isempty(SatDataAll{i})
-            currentSatPositions(i, :) = SatDataAll{i}(t_idx, :);
-            currentSatVelocities(i, :) = SatVelAll{i}(t_idx, :); % <--- [新增]
+            allPositions(i, :) = SatDataAll{i}(t_idx, :);
+            allVelocities(i, :) = SatVelAll{i}(t_idx, :);
         else
-            currentSatPositions(i, :) = [NaN, NaN, NaN];
-            currentSatVelocities(i, :) = [NaN, NaN, NaN];
+            allPositions(i, :) = [NaN, NaN, NaN];
+            allVelocities(i, :) = [NaN, NaN, NaN];
         end
     end
     
+    % 填充地面站数据 (视为不动的卫星)
+    for k = 1:numGS
+        allPositions(numSats + k, :) = GS_Pos_All{k}(t_idx, :);
+        allVelocities(numSats + k, :) = [0, 0, 0]; % 地面站相对地心地固坐标系速度为0
+    end
+    
     % =====================================================================
-    % --- B. 计算地面站最近接入卫星 ---
+    % --- B. 计算地面站接入信息 (供 Metadata 记录) ---
     % =====================================================================
     gs_results = struct('SatName', {'', ''}, 'Dist', {Inf, Inf});
+    currentSatPositions = allPositions(1:numSats, :);
     
     for k = 1:2
-        current_gs_pos = GS_Pos_All{k}(t_idx, :);
+        current_gs_pos = allPositions(numSats + k, :);
         vec_gs_to_sats = currentSatPositions - current_gs_pos;
         dists_gs_sats = sqrt(sum(vec_gs_to_sats.^2, 2));
         
@@ -306,11 +318,10 @@ for t_idx = 1:numTimeSteps
         
         valid_dists = dists_gs_sats;
         valid_dists(~is_visible) = Inf;
-        
         [min_dist, min_idx] = min(valid_dists);
         
         if ~isinf(min_dist)
-            gs_results(k).SatName = satellite_names{min_idx};
+            gs_results(k).SatName = allNodeNames{min_idx};
             gs_results(k).Dist = min_dist;
         else
             gs_results(k).SatName = "None";
@@ -318,36 +329,35 @@ for t_idx = 1:numTimeSteps
         end
     end
     
-    % 保存地面站路由 CSV
+    % 保存地面站路由 CSV (核心改变：设置 SourceSat = SourceGS, TargetSat = TargetGS)
     if ~strcmp(gs_results(1).SatName, "None") || ~strcmp(gs_results(2).SatName, "None")
         file_name_gs = sprintf('GS_Route_step%04d_%s.csv', t_idx, safe_time_str);
-        
         full_path_gs = fullfile(gs_folder, file_name_gs);
         
+        % 将 SourceSat 和 TargetSat 指向地面站自身节点，使 Python 能够从地面站节点开始全局寻路
         T_GS = table(...
-            string(GS_Defs(1).Name), string(gs_results(1).SatName), gs_results(1).Dist, ...
-            string(GS_Defs(2).Name), string(gs_results(2).SatName), gs_results(2).Dist, ...
+            allNodeNames(numSats + 1), allNodeNames(numSats + 1), gs_results(1).Dist, ...
+            allNodeNames(numSats + 2), allNodeNames(numSats + 2), gs_results(2).Dist, ...
             'VariableNames', {'SourceGS', 'SourceSat', 'SourceDist_km', ...
                               'TargetGS', 'TargetSat', 'TargetDist_km'});
         writetable(T_GS, full_path_gs);
     end
     
     % =====================================================================
-    % --- C. 计算星间链路 (ISL) 并行计算 ---
+    % --- C. 计算所有节点间的全拓扑链路 (ISL + 星地) ---
     % =====================================================================
     results_dist = zeros(totalPairs, 1);
-    results_omega = zeros(totalPairs, 1); % <--- [新增] 存储角速度
+    results_omega = zeros(totalPairs, 1);
     results_visible = false(totalPairs, 1);
     
     parfor k = 1:totalPairs
         idx1 = pairIndices(k, 1);
         idx2 = pairIndices(k, 2);
         
-        pos1 = currentSatPositions(idx1, :);
-        pos2 = currentSatPositions(idx2, :);
-        
-        vel1 = currentSatVelocities(idx1, :); % <--- [新增]
-        vel2 = currentSatVelocities(idx2, :); % <--- [新增]
+        pos1 = allPositions(idx1, :);
+        pos2 = allPositions(idx2, :);
+        vel1 = allVelocities(idx1, :);
+        vel2 = allVelocities(idx2, :);
         
         d_vec = pos2 - pos1; % 相对位置向量 r
         dist = norm(d_vec);
@@ -384,10 +394,10 @@ for t_idx = 1:numTimeSteps
     
     if count > 0
         T_col = repmat(current_time_str, count, 1);
-        S1_col = satellite_names(visible_idx1)';
-        S2_col = satellite_names(visible_idx2)';
+        S1_col = allNodeNames(visible_idx1)';
+        S2_col = allNodeNames(visible_idx2)';
         D_col = visible_dists;
-        O_col = visible_omegas; % <--- [新增]
+        O_col = visible_omegas;
         
         T_table = table(S1_col, S2_col, D_col, O_col, ...
             'VariableNames', {'Sat1', 'Sat2', 'Distance_km', 'AngularVelocity_rad_s'});
