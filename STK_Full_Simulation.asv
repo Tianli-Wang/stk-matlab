@@ -47,13 +47,13 @@ output_folder = fullfile(run_root_folder, sub_folder_name);
 
 % 5. [关键修改] 定义 GS 和 Visibility 的分类文件夹
 % gs_folder = fullfile(output_folder, 'GS_Datas');      % GS类文件存放处
-vis_folder = fullfile(output_folder, 'Visibility_Datas');  % Visibility类文件存放处
+vis_folder = fullfile(output_folder, 'Visibility_Datas_test');  % Visibility类文件存放处
 
 % 创建分类文件夹
 % if ~exist(gs_folder, 'dir'), mkdir(gs_folder); end
 if ~exist(vis_folder, 'dir'), mkdir(vis_folder); end
 
-% fprintf('输出目录已准备:\n  GS数据: %s\n  链路数据: %s\n', gs_folder, vis_folder);
+fprintf('输出目录已准备:\n  GS数据: %s\n  链路数据: %s\n', gs_folder, vis_folder);
 
 %% 1. 初始化 STK
 if USE_ENGINE
@@ -302,7 +302,21 @@ for t_idx = 1:numTimeSteps
     end
     
     % =====================================================================
-    % --- B. 计算所有节点间的全拓扑链路 (ISL + 星地) ---
+    % --- B. 定义地面站路由任务 (仅记录端点名称) ---
+    % =====================================================================
+    file_name_gs = sprintf('GS_Route_step%04d_%s.csv', t_idx, safe_time_str);
+    full_path_gs = fullfile(gs_folder, file_name_gs);
+    
+    % 直接定义端到端任务：从地面站节点到地面站节点
+    T_GS = table(...
+        allNodeNames(numSats + 1), allNodeNames(numSats + 1), 0, ...
+        allNodeNames(numSats + 2), allNodeNames(numSats + 2), 0, ...
+        'VariableNames', {'SourceGS', 'SourceSat', 'SourceDist_km', ...
+                          'TargetGS', 'TargetSat', 'TargetDist_km'});
+    writetable(T_GS, full_path_gs);
+    
+    % =====================================================================
+    % --- C. 计算所有节点间的全拓扑链路 (ISL + 星地) ---
     % =====================================================================
     results_dist = zeros(totalPairs, 1);
     results_omega = zeros(totalPairs, 1);
@@ -375,118 +389,155 @@ fprintf('结果保存在: %s\n', output_folder);
 %% ============================================================
 %% Additioncal Option 批量核心计算循环 (不同距离阈值)
 %% ============================================================
-%% ============================================================
-%% [阶段3] 批量核心计算循环 (针对不同距离阈值，使用统一 GS 节点逻辑)
-%% ============================================================
-base_root = 'C:\Users\Tianl\Documents\PhD\Papers\second_paper\Algorith\OutputFiles'; 
-run_root_folder = fullfile(base_root, sprintf('RawData'));
-sub_folder_name = sprintf('Results_Step%ds_Limit%dkm', time_step_val, distance_limit);
-output_folder = fullfile(run_root_folder, sub_folder_name);
-for i = 2:8
-    distance_limit = i * 500; % 1000km, 1500km, ..., 4000km
+for i = 1:8
+    distance_limit = i * 500;
     
-    % 定义该距离下的专用输出文件夹 (GS 已经并在 Visibility 里，不需要 GS_Datas 了)
-    vis_folder_limit = fullfile(output_folder, sprintf('Visibility_Limit%dkm', distance_limit));
-    if ~exist(vis_folder_limit, 'dir'), mkdir(vis_folder_limit); end
+   % 定义分类子文件夹
+    gs_folder = fullfile(output_folder, 'GS_Datas');
+    vis_folder = fullfile(output_folder, 'visibility_Datas');
+
+    % 创建文件夹
+    if ~exist(gs_folder, 'dir'), mkdir(gs_folder); end
+    if ~exist(vis_folder, 'dir'), mkdir(vis_folder); end
     
     fprintf('\n[阶段3] 开始批量循环 (Limit=%d km)...\n', distance_limit);
-    fprintf('  数据将存入: %s\n', vis_folder_limit);
+    fprintf('  数据将存入: %s 和 %s\n', gs_folder, vis_folder);
 
-    % 重新计算并行索引 (包含卫星 + 地面站)
-    numGS = length(GS_Defs);
-    totalNodes = numSats + numGS;
-    % 这里的 allNodeNames 已经在前面定义过了，直接使用
-    
-    % 计算全排列组合数
-    totalPairs = totalNodes * (totalNodes - 1) / 2;
-    pairIndices = nchoosek(1:totalNodes, 2);
+    % 准备并行索引 (同阶段2)
+    totalPairs = numSats * (numSats - 1) / 2;
+    pairIndices = zeros(totalPairs, 2);
+    idx = 0;
+    for ii = 1:numSats
+        for jj = (ii+1):numSats
+            idx = idx + 1;
+            pairIndices(idx, :) = [ii, jj];
+        end
+    end
 
-    total_timer_batch = tic;
+    poolObj = gcp('nocreate');
+    if isempty(poolObj), parpool; end
+
+    Re = 6378.137; 
+    total_timer = tic;
 
     for t_idx = 1:numTimeSteps
+
         current_time_str = GlobalTimeStrs(t_idx);
         safe_time_str = regexprep(current_time_str, '[:. ]', '_');
 
-        fprintf('Limit %dkm | 步数 %d/%d... ', distance_limit, t_idx, numTimeSteps);
+        fprintf('处理时间步 %d/%d (%s)... ', t_idx, numTimeSteps, current_time_str);
         step_timer = tic;
 
-        % --- A. 组装当前时刻所有节点 (卫星+地面站) 的位置和速度矩阵 ---
-        allPositions = zeros(totalNodes, 3);
-        allVelocities = zeros(totalNodes, 3);
+        % --- A. 组装当前时刻卫星位置和速度矩阵 ---
+        currentSatPositions = zeros(numSats, 3);
+        currentSatVelocities = zeros(numSats, 3); % <--- [新增]
         
-        % 填充卫星数据
         for ii = 1:numSats
             if ~isempty(SatDataAll{ii})
-                allPositions(ii, :) = SatDataAll{ii}(t_idx, :);
-                allVelocities(ii, :) = SatVelAll{ii}(t_idx, :);
+                currentSatPositions(ii, :) = SatDataAll{ii}(t_idx, :);
+                currentSatVelocities(ii, :) = SatVelAll{ii}(t_idx, :); % <--- [新增] 使用已提取的数据
+            else
+                currentSatPositions(ii, :) = [NaN, NaN, NaN];
+                currentSatVelocities(ii, :) = [NaN, NaN, NaN];
             end
         end
-        % 填充地面站数据 (视为不动的卫星)
-        for k = 1:numGS
-            allPositions(numSats + k, :) = GS_Pos_All{k}(t_idx, :);
-            allVelocities(numSats + k, :) = [0, 0, 0];
+
+        % --- B. 地面站部分 (同阶段2，略微简化打印) ---
+        gs_results = struct('SatName', {'', ''}, 'Dist', {Inf, Inf});
+        for k = 1:2
+            current_gs_pos = GS_Pos_All{k}(t_idx, :);
+            vec_gs_to_sats = currentSatPositions - current_gs_pos;
+            dists_gs_sats = sqrt(sum(vec_gs_to_sats.^2, 2));
+            dot_prods = sum(repmat(current_gs_pos, numSats, 1) .* vec_gs_to_sats, 2);
+            is_visible = dot_prods > 0;
+            valid_dists = dists_gs_sats;
+            valid_dists(~is_visible) = Inf;
+            [min_dist, min_idx] = min(valid_dists);
+            if ~isinf(min_dist)
+                gs_results(k).SatName = satellite_names{min_idx};
+                gs_results(k).Dist = min_dist;
+            else
+                gs_results(k).SatName = "None";
+                gs_results(k).Dist = NaN;
+            end
+        end
+        
+        if ~strcmp(gs_results(1).SatName, "None") || ~strcmp(gs_results(2).SatName, "None")
+            file_name_gs = sprintf('GS_Route_step%04d_%s.csv', t_idx, safe_time_str);
+            full_path_gs = fullfile(gs_folder, file_name_gs);
+            T_GS = table(...
+                string(GS_Defs(1).Name), string(gs_results(1).SatName), gs_results(1).Dist, ...
+                string(GS_Defs(2).Name), string(gs_results(2).SatName), gs_results(2).Dist, ...
+                'VariableNames', {'SourceGS', 'SourceSat', 'SourceDist_km', ...
+                                  'TargetGS', 'TargetSat', 'TargetDist_km'});
+            writetable(T_GS, full_path_gs);
         end
 
-        % --- B. 并行计算所有链路 (ISL + 星地) ---
+        % --- C. 计算星间链路 (含角速度) ---
         results_dist = zeros(totalPairs, 1);
-        results_omega = zeros(totalPairs, 1);
+        results_omega = zeros(totalPairs, 1); % <--- [新增]
         results_visible = false(totalPairs, 1);
 
-        parfor k_pair = 1:totalPairs
-            idx1 = pairIndices(k_pair, 1);
-            idx2 = pairIndices(k_pair, 2);
+        parfor k = 1:totalPairs
+            idx1 = pairIndices(k, 1);
+            idx2 = pairIndices(k, 2);
 
-            pos1 = allPositions(idx1, :);
-            pos2 = allPositions(idx2, :);
-            vel1 = allVelocities(idx1, :);
-            vel2 = allVelocities(idx2, :);
+            pos1 = currentSatPositions(idx1, :);
+            pos2 = currentSatPositions(idx2, :);
+            
+            vel1 = currentSatVelocities(idx1, :); % <--- [新增]
+            vel2 = currentSatVelocities(idx2, :); % <--- [新增]
 
             d_vec = pos2 - pos1;
             dist = norm(d_vec);
-            results_dist(k_pair) = dist;
+            results_dist(k) = dist;
 
-            % 计算相对角速度
+            % --- [新增] Omega ---
             v_vec = vel2 - vel1;
-            results_omega(k_pair) = norm(cross(d_vec, v_vec)) / (dist^2 + eps);
+            omega = norm(cross(d_vec, v_vec)) / (dist^2 + eps);
+            results_omega(k) = omega;
+            % ------------------
 
-            % 遮挡检查
             isVisible = true;
-            t_val = -dot(pos1, d_vec) / (dot(d_vec, d_vec) + eps);
-            if t_val > 0 && t_val < 1
-                P_closest = pos1 + t_val * d_vec;
+            t = -dot(pos1, d_vec) / dot(d_vec, d_vec);
+            if t > 0 && t < 1
+                P_closest = pos1 + t * d_vec;
                 if norm(P_closest) < Re
                     isVisible = false;
                 end
             end
-            results_visible(k_pair) = isVisible;
+            results_visible(k) = isVisible;
         end
 
-        % --- C. 筛选并保存 ---
+        % --- D. 保存 ---
         mask = results_visible & (results_dist < distance_limit);
-        
         visible_dists = results_dist(mask);
-        visible_omegas = results_omega(mask);
+        visible_omegas = results_omega(mask); % <--- [新增]
         visible_idx1 = pairIndices(mask, 1);
         visible_idx2 = pairIndices(mask, 2);
         count = length(visible_dists);
 
         if count > 0
-            S1_col = allNodeNames(visible_idx1);
-            S2_col = allNodeNames(visible_idx2);
-            
-            T_table = table(S1_col, S2_col, visible_dists, visible_omegas, ...
+            T_col = repmat(current_time_str, count, 1);
+            S1_col = satellite_names(visible_idx1)';
+            S2_col = satellite_names(visible_idx2)';
+            D_col = visible_dists;
+            O_col = visible_omegas; % <--- [新增]
+
+            T_table = table(S1_col, S2_col, D_col, O_col, ...
                 'VariableNames', {'Sat1', 'Sat2', 'Distance_km', 'AngularVelocity_rad_s'});
 
             file_name_isl = sprintf('visibility_step%04d_%s.csv', t_idx, safe_time_str);
-            full_path_isl = fullfile(vis_folder_limit, file_name_isl);
+            full_path_isl = fullfile(vis_folder, file_name_isl);
             writetable(T_table, full_path_isl);
-            fprintf('总链路: %d条 (耗时 %.2fs)\n', count, toc(step_timer));
+            fprintf('链路: %d条, GS接入: [%s, %s] (耗时 %.2fs)\n', count, gs_results(1).SatName, gs_results(2).SatName, toc(step_timer));
         else
-            fprintf('无有效链路 (耗时 %.2fs)\n', toc(step_timer));
+            fprintf('无星间链路, (耗时 %.2fs)\n', toc(step_timer));
         end
     end
 
-    fprintf('\nBatch Limit=%d km 执行完毕! 总耗时: %.2f 秒\n', distance_limit, toc(total_timer_batch));
+    fprintf('\n批量循环(Limit=%d)处理完成! 总耗时: %.2f 秒\n', distance_limit, toc(total_timer));
+    fprintf('结果保存在: %s\n', output_folder);
 end
 
 %% =========================================================================
