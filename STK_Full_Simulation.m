@@ -279,7 +279,9 @@ fprintf('\n[阶段1] 正在提取所有位置和速度数据...\n');
 % 1.1 提取卫星数据
 SatDataAll = cell(numSats, 1); 
 SatVelAll = cell(numSats, 1);  % <--- [新增] 存储速度数据
-GlobalTimeStrs = {}; 
+GlobalTimeStrs = strings(0, 1);
+satellite_paths = strcat("Satellite/", string(satellite_names(:)));
+fprintf('  Optimization: native velocity from STK, static GS ECEF reuse\n');
 
 ppm_exist = exist('ParforProgressMonitor', 'class');
 if ppm_exist, ppm = ParforProgressMonitor(numSats, '提取卫星数据'); end
@@ -287,28 +289,17 @@ if ppm_exist, ppm = ParforProgressMonitor(numSats, '提取卫星数据'); end
 for i = 1:numSats
     satName = satellite_names{i};
     try
-        obj = root.GetObjectFromPath(['Satellite/' satName]);
+        obj = root.GetObjectFromPath(char(satellite_paths(i)));
         
         % --- 提取位置 ---
-        dp_pos = obj.DataProviders.Item('Vectors(Fixed)').Group.Item('Position');
-        res_pos = dp_pos.Exec(StartTime, StopTime, time_step_val);
-        
-        x = cell2mat(res_pos.DataSets.GetDataSetByName('x').GetValues);
-        y = cell2mat(res_pos.DataSets.GetDataSetByName('y').GetValues);
-        z = cell2mat(res_pos.DataSets.GetDataSetByName('z').GetValues);
-        SatDataAll{i} = [x, y, z];
+        [sat_pos, time_vals] = extractFixedVectorSeries(obj, 'Position', StartTime, StopTime, time_step_val, true);
+        SatDataAll{i} = sat_pos;
         
         % --- [新增] 提取速度 ---
-        dp_vel = obj.DataProviders.Item('Vectors(Fixed)').Group.Item('Velocity');
-        res_vel = dp_vel.Exec(StartTime, StopTime, time_step_val);
-        vx = cell2mat(res_vel.DataSets.GetDataSetByName('x').GetValues);
-        vy = cell2mat(res_vel.DataSets.GetDataSetByName('y').GetValues);
-        vz = cell2mat(res_vel.DataSets.GetDataSetByName('z').GetValues);
-        SatVelAll{i} = [vx, vy, vz]; % <--- [新增] 存储速度向量
+        SatVelAll{i} = extractFixedVectorSeries(obj, 'Velocity', StartTime, StopTime, time_step_val, false);
         
-        if i == 1
-            time_vals = res_pos.DataSets.GetDataSetByName('Time').GetValues;
-            GlobalTimeStrs = string(time_vals);
+        if isempty(GlobalTimeStrs)
+            GlobalTimeStrs = string(time_vals(:));
         end
     catch
         SatDataAll{i} = [];
@@ -319,19 +310,13 @@ end
 
 % 1.2 提取地面站数据
 fprintf('正在提取地面站位置数据...\n');
-GS_Pos_All = cell(1, 2); 
+numTimeSteps = length(GlobalTimeStrs);
+GS_Pos_All = cell(1, length(GS_Defs)); 
 for k = 1:length(GS_Defs)
-    gsObj = root.GetObjectFromPath(['Facility/' GS_Defs(k).Name]);
-    dp_gs = gsObj.DataProviders.Item('Vectors(Fixed)').Group.Item('Position');
-    res_gs = dp_gs.Exec(StartTime, StopTime, time_step_val);
-    
-    gx = cell2mat(res_gs.DataSets.GetDataSetByName('x').GetValues);
-    gy = cell2mat(res_gs.DataSets.GetDataSetByName('y').GetValues);
-    gz = cell2mat(res_gs.DataSets.GetDataSetByName('z').GetValues);
-    GS_Pos_All{k} = [gx, gy, gz];
+    gs_pos_ecef = geodeticToECEFkm(GS_Defs(k).Lat, GS_Defs(k).Lon, 0);
+    GS_Pos_All{k} = repmat(gs_pos_ecef, numTimeSteps, 1);
 end
 
-numTimeSteps = length(GlobalTimeStrs);
 fprintf('数据提取完成。共 %d 个时间步。\n', numTimeSteps);
 
 %% ============================================================
@@ -648,4 +633,42 @@ if exist(route_file, 'file')
     end
 else
     fprintf('提示: 未找到 %s，跳过可视化步骤。\n', route_file);
+end
+
+function [vectorData, timeVals] = extractFixedVectorSeries(obj, vectorName, startTime, stopTime, timeStep, returnTime)
+if nargin < 6
+    returnTime = false;
+end
+
+provider = obj.DataProviders.Item('Vectors(Fixed)').Group.Item(vectorName);
+result = provider.Exec(startTime, stopTime, timeStep);
+
+x = cell2mat(result.DataSets.GetDataSetByName('x').GetValues);
+y = cell2mat(result.DataSets.GetDataSetByName('y').GetValues);
+z = cell2mat(result.DataSets.GetDataSetByName('z').GetValues);
+vectorData = [x, y, z];
+
+if returnTime
+    timeVals = result.DataSets.GetDataSetByName('Time').GetValues;
+else
+    timeVals = {};
+end
+end
+
+function ecef = geodeticToECEFkm(latDeg, lonDeg, altKm)
+a = 6378.137;
+f = 1 / 298.257223563;
+e2 = f * (2 - f);
+
+lat = deg2rad(latDeg);
+lon = deg2rad(lonDeg);
+sinLat = sin(lat);
+cosLat = cos(lat);
+cosLon = cos(lon);
+sinLon = sin(lon);
+
+N = a / sqrt(1 - e2 * sinLat^2);
+ecef = [(N + altKm) * cosLat * cosLon, ...
+        (N + altKm) * cosLat * sinLon, ...
+        (N * (1 - e2) + altKm) * sinLat];
 end
