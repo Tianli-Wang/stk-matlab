@@ -1,4 +1,4 @@
-function run_STK_Export_SatelliteStates_CSV(cfg)
+﻿function run_STK_Export_SatelliteStates_CSV(cfg)
 % =========================================================================
 % Export satellite states directly from STK to CSV for the full simulation
 % duration.
@@ -17,7 +17,7 @@ function run_STK_Export_SatelliteStates_CSV(cfg)
 %       export_metadata.mat
 
 
-% 直接��? MATLAB 里运行这段就可以��?
+% 鐩存帴鍦?MATLAB 閲岃繍琛岃繖娈靛氨鍙互锛?
 
 % cfg = struct( ...
 %     'distance_limit', 1000, ...
@@ -25,11 +25,11 @@ function run_STK_Export_SatelliteStates_CSV(cfg)
 %     'RUN_VISIBILITY_POSTPROCESS', true);
 
 % run_STK_Export_SatelliteStates_CSV(cfg);
-% 如果你已经先导出过一��? satellite_states_combined.csv，想避免重复建星座，直接用这段更合�?�：
+% 濡傛灉浣犲凡缁忓厛瀵煎嚭杩囦竴娆?satellite_states_combined.csv锛屾兂閬垮厤閲嶅寤烘槦搴э紝鐩存帴鐢ㄨ繖娈垫洿鍚堥€傦細
 
 % cfg = struct( ...
 %     'POSTPROCESS_ONLY', true, ...
-%     'STATE_SOURCE', 'C:\你的路径\satellite_states_combined.csv', ...
+%     'STATE_SOURCE', 'C:\浣犵殑璺緞\satellite_states_combined.csv', ...
 %     'distance_limit', 1000, ...
 %     'distance_limit_batch', 1000:500:4000, ...
 %     'RUN_VISIBILITY_POSTPROCESS', true, ...
@@ -47,10 +47,10 @@ clc;
 scriptDir = fileparts(mfilename('fullpath'));
 addpath(scriptDir);
 
-% 统一在这里读取配置项��?
-% - 可以完整跑一��? STK 导出
-% - 也可以只复用已有状�?�做离线后处��?
-% - 还可以额外导出指定卫星对的�?�度时间序列
+% 统一在这里读取配置项：
+% - 可以完整跑一遍 STK 导出
+% - 也可以只复用已有状态做离线后处理
+% - 还可以额外导出指定卫星对的速度时间序列
 USE_ENGINE                        = toLogical(getConfigValue(cfg, 'USE_ENGINE', 1));
 SHOW_GUI                          = toLogical(getConfigValue(cfg, 'SHOW_GUI', ~USE_ENGINE));
 GS_SCENARIO                       = char(getConfigValue(cfg, 'GS_SCENARIO', 'BBS'));
@@ -77,8 +77,8 @@ POSTPROCESS_BASE_ROOT             = char(getConfigValue(cfg, 'POSTPROCESS_BASE_R
 POSTPROCESS_ONLY                  = toLogical(getConfigValue(cfg, 'POSTPROCESS_ONLY', false));
 STATE_SOURCE                      = getConfigValue(cfg, 'STATE_SOURCE', "");
 
-% POSTPROCESS_ONLY=true 时，直接跳过 STK 建模与导出，
-% 只利用已有的状�?? CSV 重新计算不同距离阈�?�下的可见链路�??
+% POSTPROCESS_ONLY=true 鏃讹紝鐩存帴璺宠繃 STK 寤烘ā涓庡鍑猴紝
+% 鍙埄鐢ㄥ凡鏈夌殑鐘舵€?CSV 閲嶆柊璁＄畻涓嶅悓璺濈闃堝€间笅鐨勫彲瑙侀摼璺€?
 if POSTPROCESS_ONLY
     if strlength(string(STATE_SOURCE)) == 0
         error('POSTPROCESS_ONLY=true requires cfg.STATE_SOURCE to point to an exported state CSV or folder.');
@@ -118,8 +118,8 @@ fprintf('  Output root : %s\n', run_folder);
 [app, root] = initializeStk(USE_ENGINE, SHOW_GUI);
 cleanupGuard = onCleanup(@() cleanupStk(app, root, CLOSE_STK_WHEN_DONE)); %#ok<NASGU>
 
-% 这里仍然沿用 STK_Full_Simulation.m 的建模流程，
-% 目的是让导出的状态与主仿真脚本保持一致�??
+% 杩欓噷浠嶇劧娌跨敤 STK_Full_Simulation.m 鐨勫缓妯℃祦绋嬶紝
+% 鐩殑鏄瀵煎嚭鐨勭姸鎬佷笌涓讳豢鐪熻剼鏈繚鎸佷竴鑷淬€?
 scenario = createScenario(root, StartTime, StopTime, USE_ENGINE);
 createConstellationLikeFullSimulation(root, scenario, USE_ENGINE, USE_MULTI_LAYER, isTestMode);
 
@@ -148,8 +148,8 @@ failedSatelliteNames = {};
 hasWrittenCombined = false;
 firstSuccessfulSatelliteCsv = "";
 
-% STK 侧按“卫星�?�为粒度��?次�?�导出完整时间段的状态，
-% 这样可以避免逐时间步 COM 读取带来的�?�能��?��?��?
+% STK 渚ф寜鈥滃崼鏄熲€濅负绮掑害涓€娆℃€у鍑哄畬鏁存椂闂存鐨勭姸鎬侊紝
+% 杩欐牱鍙互閬垮厤閫愭椂闂存 COM 璇诲彇甯︽潵鐨勬€ц兘寮€閿€銆?
 for i = 1:numSatsToExport
     satName = satellite_names{i};
     outFile = fullfile(per_satellite_folder, [satName '.csv']);
@@ -227,7 +227,7 @@ end
 metadata.RelativeVelocityPairCount = size(relativeVelocityPairs, 1);
 metadata.RelativeVelocityFolder = relative_velocity_folder;
 
-% 下面先汇总导出结果，再按��?追加“相对�?�度”和“可见�?�后处理”两类离线产物�??
+% 涓嬮潰鍏堟眹鎬诲鍑虹粨鏋滐紝鍐嶆寜闇€杩藉姞鈥滅浉瀵归€熷害鈥濆拰鈥滃彲瑙佹€у悗澶勭悊鈥濅袱绫荤绾夸骇鐗┿€?
 fprintf('\nExport finished in %.2f s.\n', toc(export_timer));
 fprintf('Per-satellite CSV folder:\n  %s\n', per_satellite_folder);
 if EXPORT_GROUND_STATION_STATES
@@ -250,8 +250,8 @@ metadata.RelativeVelocityCombinedPath = relativeVelocityCombinedPath;
 
 if RUN_VISIBILITY_POSTPROCESS
     postprocess_timer = tic;
-    % 这里把状��? CSV 交给 STK_Full_Simulation_CSV.m��?
-    % 自动生成按时间步拆分��? visibility_step*.csv 文件��?
+    % 杩欓噷鎶婄姸鎬?CSV 浜ょ粰 STK_Full_Simulation_CSV.m锛?
+    % 鑷姩鐢熸垚鎸夋椂闂存鎷嗗垎鐨?visibility_step*.csv 鏂囦欢銆?
     stateSourceForPostprocess = resolveVisibilityStateSource(BUILD_COMBINED_CSV, hasWrittenCombined, combined_csv_path, per_satellite_folder);
     visibilityCfg = makeVisibilityPostprocessConfig( ...
         stateSourceForPostprocess, distance_limit, distance_limit_batch, ...
@@ -298,7 +298,7 @@ end
 end
 
 function [app, root] = initializeStk(USE_ENGINE, SHOW_GUI)
-% 初始��? STK Engine ��? GUI��?
+% 鍒濆鍖?STK Engine 鎴?GUI銆?
 fprintf('Initializing STK...\n');
 
 if USE_ENGINE
@@ -321,7 +321,7 @@ end
 end
 
 function scenario = createScenario(root, StartTime, StopTime, USE_ENGINE)
-% 创建场景并设置仿真时间�??
+% 鍒涘缓鍦烘櫙骞惰缃豢鐪熸椂闂淬€?
 fprintf('Resetting and creating scenario...\n');
 
 try
@@ -347,7 +347,7 @@ end
 end
 
 function createConstellationLikeFullSimulation(root, scenario, USE_ENGINE, USE_MULTI_LAYER, isTestMode)
-% 使用��? STK_Full_Simulation.m ��?致的参数构建星座��?
+% 浣跨敤涓?STK_Full_Simulation.m 涓€鑷寸殑鍙傛暟鏋勫缓鏄熷骇銆?
 fprintf('Creating constellation using STK_Full_Simulation.m settings...\n');
 
 P = 80;
@@ -475,7 +475,7 @@ end
 end
 
 function configureExportEnvironment(root)
-% 固定导出单位��? CSV 格式，避免受 STK 当前界面设置影响��?
+% 鍥哄畾瀵煎嚭鍗曚綅鍜?CSV 鏍煎紡锛岄伩鍏嶅彈 STK 褰撳墠鐣岄潰璁剧疆褰卞搷銆?
 fprintf('Configuring units and export format...\n');
 
 unitCommands = {
@@ -506,7 +506,7 @@ end
 end
 
 function exportSatelliteStateCsv(root, satName, reportStyle, outFile, StartTime, StopTime, timeStep)
-% 调用 STK ��? ReportCreate，一次�?�导出单颗卫星整个时间段的状态�??
+% 璋冪敤 STK 鐨?ReportCreate锛屼竴娆℃€у鍑哄崟棰楀崼鏄熸暣涓椂闂存鐨勭姸鎬併€?
 command = sprintf(['ReportCreate */Satellite/%s Type Export Style "%s" ', ...
     'File "%s" TimePeriod "%s" "%s" TimeStep %s'], ...
     satName, reportStyle, outFile, StartTime, StopTime, num2str(timeStep, '%.15g'));
@@ -515,7 +515,7 @@ root.ExecuteCommand(command);
 end
 
 function appendExportedCsvToCombined(inputCsvPath, satName, outputCsvPath, isFirstWrite)
-% 将�?�卫��? CSV 追加汇�?�为 combined CSV，便于后续离线统��?读取��?
+% 灏嗛€愬崼鏄?CSV 杩藉姞姹囨€讳负 combined CSV锛屼究浜庡悗缁绾跨粺涓€璇诲彇銆?
 fin = fopen(inputCsvPath, 'r');
 if fin == -1
     error('Unable to open exported CSV: %s', inputCsvPath);
@@ -558,7 +558,7 @@ end
 end
 
 function normalizeExportedStateCsvHeader(csvPath)
-% ��? STK 原始导出表头统一改写��? Time_UTC / X_km / VX_km_s 等标准列名�??
+% 鎶?STK 鍘熷瀵煎嚭琛ㄥご缁熶竴鏀瑰啓涓?Time_UTC / X_km / VX_km_s 绛夋爣鍑嗗垪鍚嶃€?
 fin = fopen(csvPath, 'r');
 if fin == -1
     error('Unable to open exported CSV for header normalization: %s', csvPath);
@@ -584,7 +584,7 @@ fprintf(fout, '%s', remainingText);
 end
 
 function exportRelativeVelocityPairs(perSatelliteFolder, outputFolder, combinedOutputPath, pairList)
-% 对指定卫星对离线计算相对速度，不增加 STK 侧额外开��?��?
+% 瀵规寚瀹氬崼鏄熷绂荤嚎璁＄畻鐩稿閫熷害锛屼笉澧炲姞 STK 渚ч澶栧紑閿€銆?
 stateCache = containers.Map('KeyType', 'char', 'ValueType', 'any');
 
 if exist(combinedOutputPath, 'file')
@@ -613,7 +613,7 @@ end
 end
 
 function T = getCachedSatelliteStateTable(stateCache, perSatelliteFolder, satName)
-% 缓存读取后的卫星状�?�表，避免同��?颗星被重复读取�??
+% 缂撳瓨璇诲彇鍚庣殑鍗槦鐘舵€佽〃锛岄伩鍏嶅悓涓€棰楁槦琚噸澶嶈鍙栥€?
 cacheKey = char(satName);
 if isKey(stateCache, cacheKey)
     T = stateCache(cacheKey);
@@ -637,7 +637,7 @@ stateCache(cacheKey) = T;
 end
 
 function Tout = computeRelativeVelocityTable(T1, T2, sat1, sat2)
-% 两颗卫星的绝对�?�度相减，得到相对�?�度向量和模长�??
+% 涓ら鍗槦鐨勭粷瀵归€熷害鐩稿噺锛屽緱鍒扮浉瀵归€熷害鍚戦噺鍜屾ā闀裤€?
 time1 = string(T1.Time_UTC);
 time2 = string(T2.Time_UTC);
 
@@ -664,7 +664,7 @@ end
 function [pairList, warnings] = buildRelativeVelocityPairList( ...
     requestedPairsRaw, buildAllPairs, availableSatelliteNames, failedSatelliteNames, maxAllPairsSats)
 
-% 整理“要输出哪些卫星对的相对速度”这个配置�??
+% 鏁寸悊鈥滆杈撳嚭鍝簺鍗槦瀵圭殑鐩稿閫熷害鈥濊繖涓厤缃€?
 warnings = {};
 pairList = cell(0, 2);
 
@@ -698,6 +698,107 @@ for i = 1:size(pairList, 1)
 end
 [~, uniqueIdx] = unique(pairTokens, 'stable');
 pairList = pairList(uniqueIdx, :);
+end
+
+function stateSource = resolveVisibilityStateSource(buildCombinedCsv, hasWrittenCombined, combinedCsvPath, perSatelliteFolder)
+if buildCombinedCsv && hasWrittenCombined
+    stateSource = combinedCsvPath;
+else
+    stateSource = perSatelliteFolder;
+end
+end
+
+function visibilityCfg = makeVisibilityPostprocessConfig( ...
+    stateSource, distanceLimit, distanceLimitBatch, timeStepValue, ...
+    enableParallel, baseRoot, gsScenario, useMultiLayer)
+
+visibilityCfg = struct();
+visibilityCfg.STATE_SOURCE = stateSource;
+visibilityCfg.STATE_SOURCE_MODE = "auto";
+visibilityCfg.distance_limit = distanceLimit;
+visibilityCfg.distance_limit_batch = distanceLimitBatch;
+visibilityCfg.time_step_val = timeStepValue;
+visibilityCfg.ENABLE_PARALLEL = enableParallel;
+visibilityCfg.base_root = baseRoot;
+visibilityCfg.GS_SCENARIO = gsScenario;
+visibilityCfg.USE_MULTI_LAYER = useMultiLayer;
+end
+
+function pairList = normalizeRelativeVelocityPairsConfig(requestedPairsRaw, availableSatelliteNames)
+pairList = cell(0, 2);
+if isempty(requestedPairsRaw)
+    return;
+end
+
+if isstring(requestedPairsRaw) && size(requestedPairsRaw, 2) == 2
+    for i = 1:size(requestedPairsRaw, 1)
+        sat1 = resolveRelativeVelocityEndpoint(requestedPairsRaw(i, 1), availableSatelliteNames);
+        sat2 = resolveRelativeVelocityEndpoint(requestedPairsRaw(i, 2), availableSatelliteNames);
+        pairList(end + 1, :) = {sat1, sat2}; %#ok<AGROW>
+    end
+    return;
+end
+
+if iscell(requestedPairsRaw)
+    if size(requestedPairsRaw, 2) == 2 && ~iscell(requestedPairsRaw{1, 1})
+        for i = 1:size(requestedPairsRaw, 1)
+            sat1 = resolveRelativeVelocityEndpoint(requestedPairsRaw{i, 1}, availableSatelliteNames);
+            sat2 = resolveRelativeVelocityEndpoint(requestedPairsRaw{i, 2}, availableSatelliteNames);
+            pairList(end + 1, :) = {sat1, sat2}; %#ok<AGROW>
+        end
+        return;
+    end
+
+    if numel(requestedPairsRaw) == 2 && ~iscell(requestedPairsRaw{1}) && ~iscell(requestedPairsRaw{2})
+        sat1 = resolveRelativeVelocityEndpoint(requestedPairsRaw{1}, availableSatelliteNames);
+        sat2 = resolveRelativeVelocityEndpoint(requestedPairsRaw{2}, availableSatelliteNames);
+        pairList = {sat1, sat2};
+        return;
+    end
+
+    for i = 1:numel(requestedPairsRaw)
+        onePair = requestedPairsRaw{i};
+        if iscell(onePair) || isstring(onePair)
+            nestedPairs = normalizeRelativeVelocityPairsConfig(onePair, availableSatelliteNames);
+            pairList = [pairList; nestedPairs]; %#ok<AGROW>
+        else
+            error('Unsupported RELATIVE_VELOCITY_PAIRS format.');
+        end
+    end
+    return;
+end
+
+error(['Unsupported RELATIVE_VELOCITY_PAIRS format. Use either a 1x2 cell array, ', ...
+    'an Nx2 cell array, or an Nx2 string array.']);
+end
+
+function satName = resolveRelativeVelocityEndpoint(endpoint, availableSatelliteNames)
+if isnumeric(endpoint) && isscalar(endpoint)
+    idx = double(endpoint);
+    if idx < 1 || idx > numel(availableSatelliteNames) || idx ~= floor(idx)
+        error('Relative velocity pair index %g is out of range.', idx);
+    end
+    satName = char(availableSatelliteNames(idx));
+    return;
+end
+
+satName = char(string(endpoint));
+if ~ismember(string(satName), availableSatelliteNames)
+    error('Relative velocity pair references an unavailable satellite: %s', satName);
+end
+end
+
+function pairList = allSatellitePairs(satelliteNames)
+numSats = numel(satelliteNames);
+pairList = cell(numSats * (numSats - 1) / 2, 2);
+idx = 0;
+
+for i = 1:numSats
+    for j = i + 1:numSats
+        idx = idx + 1;
+        pairList(idx, :) = {char(satelliteNames(i)), char(satelliteNames(j))};
+    end
+end
 end
 
 function headerLineOut = canonicalizeStateHeaderLine(headerLineIn)
@@ -735,8 +836,8 @@ function groundStationExport = exportGroundStationData( ...
     GS_Defs, outputFolder, perGroundStationFolder, definitionCsvPath, combinedCsvPath, ...
     StartTime, StopTime, timeStepSeconds, referenceSatelliteCsvPath)
 
-% 这里把地面站导出拆成“定义表 + 状�?�表”两��? CSV，方便分别查看�??
-% 状�?�表会按时间步展��?，并尽量复用卫星导出的时间轴，便于后续联表分析�??
+% 这里把地面站导出拆成“定义表 + 状态表”两类 CSV，方便分别查看。
+% 状态表会按时间步展开，并尽量复用卫星导出的时间轴，便于后续联表分析。
 ensureFolderExists(outputFolder);
 ensureFolderExists(perGroundStationFolder);
 
@@ -748,7 +849,7 @@ stateTables = cell(numel(GS_Defs), 1);
 for k = 1:numel(GS_Defs)
     stateTables{k} = buildGroundStationStateTable(GS_Defs(k), timeKeys);
 
-    % 对单站文件名做一次清洗，避免名称中包含空格或特殊字符时影响文件读写�??
+    % 对单站文件名做一次清洗，避免名称中包含空格或特殊字符时影响文件读写。
     oneStationCsvPath = fullfile(perGroundStationFolder, ...
         [makeSafeFileToken(GS_Defs(k).Name) '.csv']);
     writetable(stateTables{k}, oneStationCsvPath);
@@ -781,7 +882,7 @@ groundStationExport.TimeSampleCount = 0;
 end
 
 function timeKeys = resolveGroundStationTimeKeys(referenceSatelliteCsvPath, StartTime, StopTime, timeStepSeconds)
-% 优先复用第一份成功导出的卫星时间轴，保证地面站状态时间标签与卫星��?致�??
+% 优先复用第一份成功导出的卫星时间轴，保证地面站状态时间标签与卫星一致。
 referenceSatelliteCsvPath = string(referenceSatelliteCsvPath);
 if strlength(referenceSatelliteCsvPath) > 0 && isfile(referenceSatelliteCsvPath)
     referenceTable = readtable(referenceSatelliteCsvPath, ...
@@ -796,7 +897,7 @@ if strlength(referenceSatelliteCsvPath) > 0 && isfile(referenceSatelliteCsvPath)
         end
     end
 end
-% 如果卫星导出全部失败，就根据起止时间和步长回��?生成时间轴�??
+% 如果卫星导出全部失败，就根据起止时间和步长回退生成时间轴。
 timeKeys = buildTimeKeysFromRange(StartTime, StopTime, timeStepSeconds);
 end
 
@@ -825,7 +926,8 @@ timeKeys = timeKeys(:);
 end
 
 function dt = parseStkTimeString(timeText)
-% STK 导出里常见的是英文月份格式，这里固定按英语月份缩写解析�??
+% STK 瀵煎嚭閲屽父瑙佺殑鏄嫳鏂囨湀浠芥牸寮忥紝杩欓噷鍥哄畾鎸夎嫳璇湀浠界缉鍐欒В鏋愩€?dt = NaT;
+% STK 瀵煎嚭閲屽父瑙佺殑鏄嫳鏂囨湀浠芥牸寮忥紝杩欓噷鍥哄畾鎸夎嫳璇湀浠界缉鍐欒В鏋愩€?dt = NaT;
 dt = NaT;
 timeText = string(timeText);
 timeFormats = ["dd MMM yyyy HH:mm:ss.SSS", "dd MMM yyyy HH:mm:ss"];
@@ -879,7 +981,7 @@ latitudes = repmat(gsDef.Lat, numRows, 1);
 longitudes = repmat(gsDef.Lon, numRows, 1);
 altitudes = repmat(gsDef.AltKm, numRows, 1);
 
-% 地面站在这里按地固坐标系静�?�建模，��?以位置恒定，速度显式写成 0��?
+% 地面站在这里按地固坐标系静态建模，所以位置恒定，速度显式写成 0。
 gsEcef = geodeticToECEFkm(gsDef.Lat, gsDef.Lon, gsDef.AltKm);
 X = repmat(gsEcef(1), numRows, 1);
 Y = repmat(gsEcef(2), numRows, 1);
@@ -1042,107 +1144,5 @@ try
         delete(app);
     end
 catch
-end
-end
-
-
-function stateSource = resolveVisibilityStateSource(buildCombinedCsv, hasWrittenCombined, combinedCsvPath, perSatelliteFolder)
-if buildCombinedCsv && hasWrittenCombined
-    stateSource = combinedCsvPath;
-else
-    stateSource = perSatelliteFolder;
-end
-end
-
-function visibilityCfg = makeVisibilityPostprocessConfig( ...
-    stateSource, distanceLimit, distanceLimitBatch, timeStepValue, ...
-    enableParallel, baseRoot, gsScenario, useMultiLayer)
-
-visibilityCfg = struct();
-visibilityCfg.STATE_SOURCE = stateSource;
-visibilityCfg.STATE_SOURCE_MODE = "auto";
-visibilityCfg.distance_limit = distanceLimit;
-visibilityCfg.distance_limit_batch = distanceLimitBatch;
-visibilityCfg.time_step_val = timeStepValue;
-visibilityCfg.ENABLE_PARALLEL = enableParallel;
-visibilityCfg.base_root = baseRoot;
-visibilityCfg.GS_SCENARIO = gsScenario;
-visibilityCfg.USE_MULTI_LAYER = useMultiLayer;
-end
-
-function pairList = normalizeRelativeVelocityPairsConfig(requestedPairsRaw, availableSatelliteNames)
-pairList = cell(0, 2);
-if isempty(requestedPairsRaw)
-    return;
-end
-
-if isstring(requestedPairsRaw) && size(requestedPairsRaw, 2) == 2
-    for i = 1:size(requestedPairsRaw, 1)
-        sat1 = resolveRelativeVelocityEndpoint(requestedPairsRaw(i, 1), availableSatelliteNames);
-        sat2 = resolveRelativeVelocityEndpoint(requestedPairsRaw(i, 2), availableSatelliteNames);
-        pairList(end + 1, :) = {sat1, sat2}; %#ok<AGROW>
-    end
-    return;
-end
-
-if iscell(requestedPairsRaw)
-    if size(requestedPairsRaw, 2) == 2 && ~iscell(requestedPairsRaw{1, 1})
-        for i = 1:size(requestedPairsRaw, 1)
-            sat1 = resolveRelativeVelocityEndpoint(requestedPairsRaw{i, 1}, availableSatelliteNames);
-            sat2 = resolveRelativeVelocityEndpoint(requestedPairsRaw{i, 2}, availableSatelliteNames);
-            pairList(end + 1, :) = {sat1, sat2}; %#ok<AGROW>
-        end
-        return;
-    end
-
-    if numel(requestedPairsRaw) == 2 && ~iscell(requestedPairsRaw{1}) && ~iscell(requestedPairsRaw{2})
-        sat1 = resolveRelativeVelocityEndpoint(requestedPairsRaw{1}, availableSatelliteNames);
-        sat2 = resolveRelativeVelocityEndpoint(requestedPairsRaw{2}, availableSatelliteNames);
-        pairList = {sat1, sat2};
-        return;
-    end
-
-    for i = 1:numel(requestedPairsRaw)
-        onePair = requestedPairsRaw{i};
-        if iscell(onePair) || isstring(onePair)
-            nestedPairs = normalizeRelativeVelocityPairsConfig(onePair, availableSatelliteNames);
-            pairList = [pairList; nestedPairs]; %#ok<AGROW>
-        else
-            error('Unsupported RELATIVE_VELOCITY_PAIRS format.');
-        end
-    end
-    return;
-end
-
-error(['Unsupported RELATIVE_VELOCITY_PAIRS format. Use either a 1x2 cell array, ', ...
-    'an Nx2 cell array, or an Nx2 string array.']);
-end
-
-function satName = resolveRelativeVelocityEndpoint(endpoint, availableSatelliteNames)
-if isnumeric(endpoint) && isscalar(endpoint)
-    idx = double(endpoint);
-    if idx < 1 || idx > numel(availableSatelliteNames) || idx ~= floor(idx)
-        error('Relative velocity pair index %g is out of range.', idx);
-    end
-    satName = char(availableSatelliteNames(idx));
-    return;
-end
-
-satName = char(string(endpoint));
-if ~ismember(string(satName), availableSatelliteNames)
-    error('Relative velocity pair references an unavailable satellite: %s', satName);
-end
-end
-
-function pairList = allSatellitePairs(satelliteNames)
-numSats = numel(satelliteNames);
-pairList = cell(numSats * (numSats - 1) / 2, 2);
-idx = 0;
-
-for i = 1:numSats
-    for j = i + 1:numSats
-        idx = idx + 1;
-        pairList(idx, :) = {char(satelliteNames(i)), char(satelliteNames(j))};
-    end
 end
 end
