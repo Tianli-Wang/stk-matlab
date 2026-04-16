@@ -607,7 +607,9 @@ for i = 1:size(pairList, 1)
     if i == 1
         writetable(Tout, combinedOutputPath);
     else
-        writetable(Tout, combinedOutputPath, 'WriteMode', 'append');
+        % 旧版本 MATLAB 可能不支持 writetable 的 WriteMode='append'。
+        % 这里改成兼容封装：优先走原生命令，失败后再用“写临时文件并去掉表头”的方式追加。
+        appendTableToCsvCompat(Tout, combinedOutputPath);
     end
 end
 end
@@ -625,7 +627,9 @@ if ~isfile(csvPath)
     error('Relative velocity export could not find satellite CSV: %s', csvPath);
 end
 
-T = readtable(csvPath, 'TextType', 'string', 'VariableNamingRule', 'preserve');
+% 这里不要直接写死新版本 MATLAB 才支持的参数组合。
+% 有些版本不支持 VariableNamingRule / TextType，需要走兼容封装。
+T = readCsvTableCompat(csvPath);
 
 requiredVars = ["Time_UTC", "VX_km_s", "VY_km_s", "VZ_km_s"];
 if ~all(ismember(requiredVars, string(T.Properties.VariableNames)))
@@ -784,8 +788,9 @@ function timeKeys = resolveGroundStationTimeKeys(referenceSatelliteCsvPath, Star
 % 优先复用第一份成功导出的卫星时间轴，保证地面站状态时间标签与卫星��?致�??
 referenceSatelliteCsvPath = string(referenceSatelliteCsvPath);
 if strlength(referenceSatelliteCsvPath) > 0 && isfile(referenceSatelliteCsvPath)
-    referenceTable = readtable(referenceSatelliteCsvPath, ...
-        'TextType', 'string', 'VariableNamingRule', 'preserve');
+    % 这里复用统一的兼容读取函数，避免旧版本 MATLAB 在
+    % VariableNamingRule 参数上直接报错。
+    referenceTable = readCsvTableCompat(referenceSatelliteCsvPath);
 
     if ismember('Time_UTC', referenceTable.Properties.VariableNames)
         timeKeys = strip(string(referenceTable.Time_UTC));
@@ -986,6 +991,97 @@ if startsWith(string(textIn), string(char(65279)))
     textOut = char(extractAfter(string(textIn), 1));
 else
     textOut = textIn;
+end
+end
+
+function T = readCsvTableCompat(filePath)
+% 兼容不同 MATLAB 版本的 readtable 调用方式。
+%
+% 兼容策略：
+% 1. 优先使用较新的 VariableNamingRule='preserve' + TextType='string'
+% 2. 如果当前版本不支持，再退回到 PreserveVariableNames=true
+% 3. 如果连 PreserveVariableNames 也不支持，就用最基础的 readtable
+%
+% 这样做的目的，是尽量保留原始表头，同时避免因为版本差异导致脚本中断。
+try
+    T = readtable(filePath, 'TextType', 'string', 'VariableNamingRule', 'preserve');
+    return;
+catch
+end
+
+try
+    T = readtable(filePath, 'TextType', 'string', 'PreserveVariableNames', true);
+    return;
+catch
+end
+
+try
+    T = readtable(filePath, 'PreserveVariableNames', true);
+    T = normalizeCompatTableTextColumns(T);
+    return;
+catch
+end
+
+T = readtable(filePath);
+T = normalizeCompatTableTextColumns(T);
+end
+
+function T = normalizeCompatTableTextColumns(T)
+% 当旧版本 readtable 无法直接返回 string 类型时，
+% 把常见的文本列统一转成 string，减少后续 string()/strip() 的隐式差异。
+for i = 1:width(T)
+    varName = T.Properties.VariableNames{i};
+    oneColumn = T.(varName);
+
+    if isstring(oneColumn) || iscellstr(oneColumn) || ischar(oneColumn) || iscategorical(oneColumn)
+        T.(varName) = string(oneColumn);
+    end
+end
+end
+
+function appendTableToCsvCompat(T, outputCsvPath)
+% 兼容不同 MATLAB 版本的 CSV 追加写入。
+%
+% 优先尝试较新的 WriteMode='append'。
+% 如果当前版本不支持，就先把表写到一个临时 CSV，再把去掉表头后的数据行
+% 逐行追加到目标文件尾部，这样旧版本也能正常工作。
+try
+    writetable(T, outputCsvPath, 'WriteMode', 'append');
+    return;
+catch
+end
+
+tempCsvPath = [tempname '.csv'];
+cleanupTempFile = onCleanup(@() deleteIfExists(tempCsvPath)); %#ok<NASGU>
+writetable(T, tempCsvPath);
+
+fin = fopen(tempCsvPath, 'r');
+if fin == -1
+    error('Unable to open temporary CSV for append fallback: %s', tempCsvPath);
+end
+cleanupIn = onCleanup(@() fclose(fin)); %#ok<NASGU>
+
+fout = fopen(outputCsvPath, 'a');
+if fout == -1
+    error('Unable to open target CSV for append fallback: %s', outputCsvPath);
+end
+cleanupOut = onCleanup(@() fclose(fout)); %#ok<NASGU>
+
+% 第一行是表头，追加时需要跳过，否则会把列名重复写进 combined CSV。
+fgetl(fin);
+
+while true
+    line = fgetl(fin);
+    if ~ischar(line)
+        break;
+    end
+    fprintf(fout, '%s\n', line);
+end
+end
+
+function deleteIfExists(filePath)
+if exist(filePath, 'file')
+    delete(filePath);
 end
 end
 
