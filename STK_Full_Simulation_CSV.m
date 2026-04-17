@@ -222,9 +222,41 @@ if ~isfile(filePath)
     error('CSV file not found: %s', filePath);
 end
 
-T = readtable(filePath, 'TextType', 'string', 'VariableNamingRule', 'preserve');
+try
+    T = readtable(filePath, 'TextType', 'string', 'VariableNamingRule', 'preserve');
+    return;
+catch
+end
+
+try
+    T = readtable(filePath, 'TextType', 'string', 'PreserveVariableNames', true);
+    return;
+catch
+end
+
+try
+    T = readtable(filePath, 'PreserveVariableNames', true);
+    T = normalizeCompatTableTextColumns(T);
+    return;
+catch
+end
+
+T = readtable(filePath);
+T = normalizeCompatTableTextColumns(T);
+
 if isempty(T)
     error('CSV file is empty: %s', filePath);
+end
+end
+
+function T = normalizeCompatTableTextColumns(T)
+for i = 1:width(T)
+    varName = T.Properties.VariableNames{i};
+    oneColumn = T.(varName);
+
+    if isstring(oneColumn) || iscellstr(oneColumn) || ischar(oneColumn) || iscategorical(oneColumn)
+        T.(varName) = string(oneColumn);
+    end
 end
 end
 

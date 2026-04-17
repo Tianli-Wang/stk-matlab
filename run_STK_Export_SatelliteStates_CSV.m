@@ -358,22 +358,26 @@ P2 = 72;
 N2 = 96;
 F2 = 15;
 
+if ~USE_MULTI_LAYER
+    P = 72;
+    N = 22;
+    F = 17;
+    P2 = 0;
+    N2 = 0;
+    F2 = 0;
+end
+
+TotalSats = P * N;
+TotalSats2 = P2 * N2;
+
 if isTestMode
     P = 5;
     N = 22;
     P2 = 2;
     N2 = 10;
-    fprintf('  Test mode enabled.\n');
-end
-
-TotalSats = 72 * 22;
-if isTestMode
     TotalSats = P * N;
-end
-
-TotalSats2 = 10 * 10;
-if isTestMode
     TotalSats2 = P2 * N2;
+    fprintf('  Test mode enabled.\n');
 end
 
 satObj = module.sat();
