@@ -350,18 +350,28 @@ function createConstellationLikeFullSimulation(root, scenario, USE_ENGINE, USE_M
 % 使用��? STK_Full_Simulation.m ��?致的参数构建星座��?
 fprintf('Creating constellation using STK_Full_Simulation.m settings...\n');
 
-P = 80;
-N = 76;
-F = 11;
+% ================================
+% Constellation configuration
+% Scheme 2: Two-layer heterogeneous constellation
+% Lower layer : 36 planes x 60 sats/plane  = 2160
+% Upper layer : 24 planes x 80 sats/plane  = 1920
+% Total                                       4080
+% ================================
 
-P2 = 72;
-N2 = 96;
-F2 = 15;
+P = 36;
+N = 60;
+F = 17;   % 可改为 11~19 之间，17 是比较稳妥的 Walker Delta 相位参数
+
+P2 = 24;
+N2 = 80;
+F2 = 11;  % 可改为 9~15，先给一个中等相位偏移
 
 if ~USE_MULTI_LAYER
-    P = 72;
-    N = 22;
+    % 单层模式下，仍保留一个约 4000 星规模的单层构型
+    P = 40;
+    N = 100;
     F = 17;
+
     P2 = 0;
     N2 = 0;
     F2 = 0;
@@ -371,10 +381,15 @@ TotalSats = P * N;
 TotalSats2 = P2 * N2;
 
 if isTestMode
-    P = 5;
-    N = 22;
-    P2 = 2;
+    % 测试模式缩小规模，但保持双层异构特征
+    P = 4;
+    N = 12;
+    F = 3;
+
+    P2 = 3;
     N2 = 10;
+    F2 = 2;
+
     TotalSats = P * N;
     TotalSats2 = P2 * N2;
     fprintf('  Test mode enabled.\n');
@@ -457,6 +472,7 @@ if USE_MULTI_LAYER
         try
             root.ExecuteCommand(sprintf('Unload / */Satellite/%s', seedName2));
         catch
+            fprintf('  [Warning] Unable to unload seed satellite %s\n', seedName2);
         end
 
         if mod(i, 5) == 0 || i == P2
