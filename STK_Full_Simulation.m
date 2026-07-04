@@ -1,36 +1,36 @@
 % =========================================================================
-% STK 并行计算完整版 - 含地面站接入分析 (北京 -> 巴西利亚)
-% 功能：
+% STK 并行计算完整�? - 含地面站接入分析 (北京 -> 巴西利亚)
+% 功能�?
 % 1. 建立星座与地面站
 % 2. 提取全时段位置与速度数据 (新增)
-% 3. 按时间步输出：
-%    - 文件A: 地面站接入情况 (SourceSat, TargetSat)
-%    - 文件B: 所有星间链路 (ISL)，包含相对角速度 (新增)
+% 3. 按时间步输出�?
+%    - 文件A: 地面站接入情�? (SourceSat, TargetSat)
+%    - 文件B: �?有星间链�? (ISL)，包含相对角速度 (新增)
 % 4. 结果存入 ../OutputFiles/Sim_Timestamp 目录 (新增)
 % =======================================================================
 
 %% 0. 全局设置
 clear; clc;
-USE_ENGINE = 1;       % 1 = STK Engine (无界面，快); 0 = GUI (有界面)
-distance_limit = 1000; % 初始星间链路距离阈值 (km)
-time_step_val = 5;    % 时间步长 (秒)
+USE_ENGINE = 1;       % 1 = STK Engine (无界面，�?); 0 = GUI (有界�?)
+distance_limit = 2000; % 初始星间链路距离阈�?? (km)
+time_step_val = 5;    % 时间步长 (�?)
 
-% ================= [修改开始] 输出路径配置与场景选择 =================
-% 1. 选择地面站仿真场景
-GS_SCENARIO = 'BBS'; % 可在此改选 'BBS' 为 北京->巴西利亚; 或改选 'NLS' 为 纽约->伦敦
+% ================= [修改�?始] 输出路径配置与场景�?�择 =================
+% 1. 选择地面站仿真场�?
+GS_SCENARIO = 'BBS'; % 可在此改�? 'BBS' �? 北京->巴西利亚; 或改�? 'NLS' �? 纽约->伦敦
 
 % 2. 选择星座层数
-USE_MULTI_LAYER = true; % <--- 是否启用多层星座可选开关 (true: 双层, false: 单层)
+USE_MULTI_LAYER = true; % <--- 是否启用多层星座可�?�开�? (true: 双层, false: 单层)
 
 if strcmp(GS_SCENARIO, 'BBS')
     gs_suffix = 'BBS';
-    % 仅保留北京、巴西利亚
+    % 仅保留北京�?�巴西利�?
     GS_Defs = struct('Name', {'Beijing_Source', 'Brasilia_Target'}, ...
                      'Lat', {39.9042, -15.7975}, ... 
                      'Lon', {116.4074, -47.8919});   
 else
     gs_suffix = 'NLS';
-    % 仅保留纽约、伦敦
+    % 仅保留纽约�?�伦�?
     GS_Defs = struct('Name', {'NewYork', 'London'}, ...
                      'Lat', {40.7128, 51.5074}, ... 
                      'Lon', {-74.0060, -0.1278});   
@@ -44,48 +44,48 @@ end
 
 run_output_suffix = sprintf('%s_%s', gs_suffix, layer_suffix);
 
-% 2. 生成本次运行的唯一时间戳
+% 2. 生成本次运行的唯�?时间�?
 % current_timestamp = datestr(now, 'yyyymmdd_HHMMSS');
 
 % 3. [关键修改] 定义绝对路径 (全局目录)
 base_root = 'C:\Users\Tianl\Documents\PhD\Papers\second_paper\Algorith\OutputFiles'; 
 
-% 4. 定义本次仿真的总文件夹 (带后缀)
+% 4. 定义本次仿真的�?�文件夹 (带后�?)
 run_root_folder = fullfile(base_root, sprintf('RawData_%s', run_output_suffix));
 
-% 确保总目录存在 (如果 D盘 对应的文件夹不存在，Matlab会自动创建)
+% 确保总目录存�? (如果 D�? 对应的文件夹不存在，Matlab会自动创�?)
 if ~exist(run_root_folder, 'dir')
     try
         mkdir(run_root_folder);
-        fprintf('已创建本次仿真总目录: %s\n', run_root_folder);
+        fprintf('已创建本次仿真�?�目�?: %s\n', run_root_folder);
     catch ME
-        error('无法创建输出目录，请检查盘符或权限。\n错误路径: %s\n错误信息: %s', run_root_folder, ME.message);
+        error('无法创建输出目录，请�?查盘符或权限。\n错误路径: %s\n错误信息: %s', run_root_folder, ME.message);
     end
 end
 
-% 4. 定义当前参数的具体子文件夹
+% 4. 定义当前参数的具体子文件�?
 sub_folder_name = sprintf('Results_Step%ds_Limit%dkm', time_step_val, distance_limit);
 output_folder = fullfile(run_root_folder, sub_folder_name);
 % ================= [修改结束] =================
 
-% 5. [关键修改] 定义 GS 和 Visibility 的分类文件夹
+% 5. [关键修改] 定义 GS �? Visibility 的分类文件夹
 % gs_folder = fullfile(output_folder, 'GS_Datas');      % GS类文件存放处
 vis_folder = fullfile(output_folder, 'Visibility_Datas');  % Visibility类文件存放处
 
-% 创建分类文件夹
+% 创建分类文件�?
 % if ~exist(gs_folder, 'dir'), mkdir(gs_folder); end
 if ~exist(vis_folder, 'dir'), mkdir(vis_folder); end
 
-% fprintf('输出目录已准备:\n  GS数据: %s\n  链路数据: %s\n', gs_folder, vis_folder);
+% fprintf('输出目录已准�?:\n  GS数据: %s\n  链路数据: %s\n', gs_folder, vis_folder);
 
-%% 1. 初始化 STK
+%% 1. 初始�? STK
 if USE_ENGINE
     try
         app = actxserver('STKX11.application');
         root = actxserver('AgStkObjects11.AgStkObjectRoot');
-        % app.NoGraphics = true; % 可选：完全关闭图形以极致加速
+        % app.NoGraphics = true; % 可�?�：完全关闭图形以极致加�?
     catch ME
-        error('无法启动 STK Engine。请检查许可。\n错误: %s', ME.message);
+        error('无法启动 STK Engine。请�?查许可�?�\n错误: %s', ME.message);
     end
 else
     try
@@ -98,16 +98,16 @@ else
     end
 end
 
-%% 2. 重置与创建场景
-fprintf('正在初始化场景...\n');
+%% 2. 重置与创建场�?
+fprintf('正在初始化场�?...\n');
 try
-    root.CloseScenario(); % 强行关闭任何已打开的场景
+    root.CloseScenario(); % 强行关闭任何已打�?的场�?
 catch ME
-    fprintf('信息:没有需要关闭的旧场景。\n');
+    fprintf('信息:没有�?要关闭的旧场景�?�\n');
 end
 
 StartTime = '27 Feb 2025 00:00:00.000'; 
-StopTime  = '27 Feb 2025 01:00:00.000'; % 示例跑1小时
+StopTime  = '27 Feb 2025 01:00:00.000'; % 示例�?1小时
 
 scenario = root.Children.New('eScenario', 'MATLAB_Routing_Analysis');
 scenario.SetTimePeriod(StartTime, StopTime);
@@ -118,7 +118,7 @@ scenario.StopTime = StopTime;
 if ~USE_ENGINE
     try
         root.ExecuteCommand('Animate * Reset');
-        disp('动画已复位成功');
+        disp('动画已复位成�?');
     catch ME
         disp('动画复位失败:');
         disp(ME.message);
@@ -128,7 +128,7 @@ end
 %% 3. 创建星座 (Starlink 550km + 新增 1000km Walker)
 % 参数定义 (Starlink 550km)
 P = 80;   % 轨道面数 (Planes)
-N = 76;   % 每面卫星数 (Sats per plane)
+N = 76;   % 每面卫星�? (Sats per plane)
 F = 11;   % 相位因子 (Phasing Parameter)
 
 % 参数定义 (新增 1000km Walker)
@@ -136,21 +136,21 @@ P2 = 72;
 N2 = 96;
 F2 = 15;
 
-% 测试模式开关
+% 测试模式�?�?
 isTestMode = false; 
 if isTestMode
     P = 5; N = 22; % 测试用小规模
     P2 = 2; N2 = 10;
-    fprintf('!!! 测试模式: 仅生成部分平面 !!!\n');
+    fprintf('!!! 测试模式: 仅生成部分平�? !!!\n');
 end
 
 TotalSats = 72 * 22; % 真实的满星座总数
 if isTestMode, TotalSats = P * N; end
 
-TotalSats2 = 10 * 10; % 1000km 满星座总数
+TotalSats2 = 10 * 10; % 1000km 满星座�?�数
 if isTestMode, TotalSats2 = P2 * N2; end
 
-fprintf('正在创建 550km层: %d 个平面，每个平面 %d 颗卫星 (F因子=%d)...\n', P, N, F);
+fprintf('正在创建 550km�?: %d 个平面，每个平面 %d 颗卫�? (F因子=%d)...\n', P, N, F);
 
 for i = 1:P
     seedName = sprintf('STARLINK_Seed_Plane%d', i);
@@ -190,12 +190,12 @@ for i = 1:P
     end
     
     if mod(i, 5) == 0
-        fprintf('已完成平面: %d / %d\n', i, P);
+        fprintf('已完成平�?: %d / %d\n', i, P);
     end
 end
 
 if USE_MULTI_LAYER
-    fprintf('正在创建 1000km 层: %d 个平面，每个平面 %d 颗卫星 (F因子=%d)...\n', P2, N2, F2);
+    fprintf('正在创建 1000km �?: %d 个平面，每个平面 %d 颗卫�? (F因子=%d)...\n', P2, N2, F2);
     for i = 1:P2
         seedName2 = sprintf('WALKER1000_Seed_Plane%d', i);
         params2 = struct();
@@ -232,12 +232,12 @@ if USE_MULTI_LAYER
         end
         
         if mod(i, 5) == 0
-            fprintf('已完成 1000km层 平面: %d / %d\n', i, P2);
+            fprintf('已完�? 1000km�? 平面: %d / %d\n', i, P2);
         end
     end
     fprintf('多层星座创建完成。\n');
 else
-    fprintf('仅使用单层 星座。\n');
+    fprintf('仅使用单�? 星座。\n');
 end
 
 % 整理卫星名称
@@ -247,7 +247,7 @@ sat.batchRenameSatellitesInSTK2(root, sat.getSatelliteNames(scenario));
 satellite_names = sat.getSatelliteNames(scenario);
 numSats = length(satellite_names);
 
-% 地面站定义已在文件开头 (第 19-31 行) 的 GS_SCENARIO 配置中完成
+% 地面站定义已在文件开�? (�? 19-31 �?) �? GS_SCENARIO 配置中完�?
 
 for k = 1:length(GS_Defs)
     try
@@ -262,19 +262,19 @@ end
 if ~USE_ENGINE
     try
         root.ExecuteCommand('Graphics * Label Show Off');
-        fprintf('已关闭 STK GUI 中所有对象的名称标签显示\n');
+        fprintf('已关�? STK GUI 中所有对象的名称标签显示\n');
     catch
         % 防止部分版本不支持该命令
     end
 end
 
-fprintf('场景准备就绪。共 %d 颗卫星, %d 个地面站。\n', numSats, length(GS_Defs));
+fprintf('场景准备就绪。共 %d 颗卫�?, %d 个地面站。\n', numSats, length(GS_Defs));
 
 %% ============================================================
-%% [阶段1] 批量提取数据 (卫星 + 地面站)
+%% [阶段1] 批量提取数据 (卫星 + 地面�?)
 %% ============================================================ 
 
-fprintf('\n[阶段1] 正在提取所有位置和速度数据...\n');
+fprintf('\n[阶段1] 正在提取�?有位置和速度数据...\n');
 
 % 1.1 提取卫星数据
 SatDataAll = cell(numSats, 1); 
@@ -305,11 +305,11 @@ for i = 1:numSats
         SatDataAll{i} = [];
         SatVelAll{i} = [];
     end
-    if mod(i, 200) == 0, fprintf('  卫星数据已提取: %d/%d\n', i, numSats); end
+    if mod(i, 200) == 0, fprintf('  卫星数据已提�?: %d/%d\n', i, numSats); end
 end
 
-% 1.2 提取地面站数据
-fprintf('正在提取地面站位置数据...\n');
+% 1.2 提取地面站数�?
+fprintf('正在提取地面站位置数�?...\n');
 numTimeSteps = length(GlobalTimeStrs);
 GS_Pos_All = cell(1, length(GS_Defs)); 
 for k = 1:length(GS_Defs)
@@ -320,10 +320,10 @@ end
 fprintf('数据提取完成。共 %d 个时间步。\n', numTimeSteps);
 
 %% ============================================================
-%% [阶段2] 核心计算循环 (地面站接入 + 星间链路)
+%% [阶段2] 核心计算循环 (地面站接�? + 星间链路)
 %% ============================================================
 
-fprintf('\n[阶段2] 开始时间循环计算...\n');
+fprintf('\n[阶段2] �?始时间循环计�?...\n');
 
 % 准备并行索引 (包含卫星与地面站)
 numGS = length(GS_Defs);
@@ -340,7 +340,7 @@ for i = 1:totalNodes
     end
 end
 
-% 启动并行池
+% 启动并行�?
 poolObj = gcp('nocreate');
 if isempty(poolObj), parpool; end
 
@@ -352,10 +352,10 @@ for t_idx = 1:numTimeSteps
     current_time_str = GlobalTimeStrs(t_idx);
     safe_time_str = regexprep(current_time_str, '[:. ]', '_');
     
-    fprintf('处理时间步 %d/%d (%s)... ', t_idx, numTimeSteps, current_time_str);
+    fprintf('处理时间�? %d/%d (%s)... ', t_idx, numTimeSteps, current_time_str);
     step_timer = tic;
     
-    % --- A. 组装当前时刻所有节点 (卫星+地面站) 的位置和速度矩阵 ---
+    % --- A. 组装当前时刻�?有节�? (卫星+地面�?) 的位置和速度矩阵 ---
     allPositions = zeros(totalNodes, 3);
     allVelocities = zeros(totalNodes, 3);
     
@@ -370,14 +370,14 @@ for t_idx = 1:numTimeSteps
         end
     end
     
-    % 填充地面站数据 (视为不动的卫星)
+    % 填充地面站数�? (视为不动的卫�?)
     for k = 1:numGS
         allPositions(numSats + k, :) = GS_Pos_All{k}(t_idx, :);
-        allVelocities(numSats + k, :) = [0, 0, 0]; % 地面站相对地心地固坐标系速度为0
+        allVelocities(numSats + k, :) = [0, 0, 0]; % 地面站相对地心地固坐标系速度�?0
     end
     
     % =====================================================================
-    % --- B. 计算所有节点间的全拓扑链路 (ISL + 星地) ---
+    % --- B. 计算�?有节点间的全拓扑链路 (ISL + 星地) ---
     % =====================================================================
     results_dist = zeros(totalPairs, 1);
     results_omega = zeros(totalPairs, 1);
@@ -396,7 +396,7 @@ for t_idx = 1:numTimeSteps
         dist = norm(d_vec);
         results_dist(k) = dist;
         
-        % --- 计算相对角速度 Omega ---
+        % --- 计算相对角�?�度 Omega ---
         v_vec = vel2 - vel1; % 相对速度向量 v
         cross_prod = cross(d_vec, v_vec);
         cross_norm = norm(cross_prod);
@@ -404,7 +404,7 @@ for t_idx = 1:numTimeSteps
         results_omega(k) = omega;
         
         isVisible = true;
-        % 遮挡检查
+        % 遮挡�?�?
         t = -dot(pos1, d_vec) / (dot(d_vec, d_vec) + eps);
         if t > 0 && t < 1
             P_closest = pos1 + t * d_vec;
@@ -415,7 +415,7 @@ for t_idx = 1:numTimeSteps
         results_visible(k) = isVisible;
     end
     
-    % --- D. 筛选并保存结果 ---
+    % --- D. 筛�?�并保存结果 ---
     mask = results_visible & (results_dist < distance_limit);
     
     visible_dists = results_dist(mask);
@@ -437,21 +437,21 @@ for t_idx = 1:numTimeSteps
         full_path_isl = fullfile(vis_folder, file_name_isl);
         
         writetable(T_table, full_path_isl);
-        fprintf('总链路: %d条 (星际+星地), (耗时 %.2fs)\n', count, toc(step_timer));
+        fprintf('总链�?: %d�? (星际+星地), (耗时 %.2fs)\n', count, toc(step_timer));
     else
-        fprintf('无有效链路, (耗时 %.2fs)\n', toc(step_timer));
+        fprintf('无有效链�?, (耗时 %.2fs)\n', toc(step_timer));
     end
 end
 
-fprintf('\n全流程处理完成! 总耗时: %.2f 秒\n', toc(total_timer));
-fprintf('结果保存在: %s\n', output_folder);
+fprintf('\n全流程处理完�?! 总�?�时: %.2f 秒\n', toc(total_timer));
+fprintf('结果保存�?: %s\n', output_folder);
 
 
 %% ============================================================
-%% Additioncal Option 批量核心计算循环 (不同距离阈值)
+%% Additioncal Option 批量核心计算循环 (不同距离阈�??)
 %% ============================================================
 %% ============================================================
-%% [阶段3] 批量核心计算循环 (针对不同距离阈值，使用统一 GS 节点逻辑)
+%% [阶段3] 批量核心计算循环 (针对不同距离阈�?�，使用统一 GS 节点逻辑)
 %% ============================================================
 base_root = 'C:\Users\Tianl\Documents\PhD\Papers\second_paper\Algorith\OutputFiles'; 
 run_root_folder = fullfile(base_root, sprintf('RawData_%s', run_output_suffix));
@@ -460,17 +460,17 @@ output_folder = fullfile(run_root_folder, sub_folder_name);
 for i = 2:8
     distance_limit = i * 500; % 1000km, 1500km, ..., 4000km
     
-    % 定义该距离下的专用输出文件夹 (GS 已经并在 Visibility 里，不需要 GS_Datas 了)
+    % 定义该距离下的专用输出文件夹 (GS 已经并在 Visibility 里，不需�? GS_Datas �?)
     vis_folder_limit = fullfile(output_folder, sprintf('Visibility_Limit%dkm', distance_limit));
     if ~exist(vis_folder_limit, 'dir'), mkdir(vis_folder_limit); end
     
-    fprintf('\n[阶段3] 开始批量循环 (Limit=%d km)...\n', distance_limit);
-    fprintf('  数据将存入: %s\n', vis_folder_limit);
+    fprintf('\n[阶段3] �?始批量循�? (Limit=%d km)...\n', distance_limit);
+    fprintf('  数据将存�?: %s\n', vis_folder_limit);
 
-    % 重新计算并行索引 (包含卫星 + 地面站)
+    % 重新计算并行索引 (包含卫星 + 地面�?)
     numGS = length(GS_Defs);
     totalNodes = numSats + numGS;
-    % 这里的 allNodeNames 已经在前面定义过了，直接使用
+    % 这里�? allNodeNames 已经在前面定义过了，直接使用
     
     % 计算全排列组合数
     totalPairs = totalNodes * (totalNodes - 1) / 2;
@@ -485,7 +485,7 @@ for i = 2:8
         fprintf('Limit %dkm | 步数 %d/%d... ', distance_limit, t_idx, numTimeSteps);
         step_timer = tic;
 
-        % --- A. 组装当前时刻所有节点 (卫星+地面站) 的位置和速度矩阵 ---
+        % --- A. 组装当前时刻�?有节�? (卫星+地面�?) 的位置和速度矩阵 ---
         allPositions = zeros(totalNodes, 3);
         allVelocities = zeros(totalNodes, 3);
         
@@ -496,13 +496,13 @@ for i = 2:8
                 allVelocities(ii, :) = SatVelAll{ii}(t_idx, :);
             end
         end
-        % 填充地面站数据 (视为不动的卫星)
+        % 填充地面站数�? (视为不动的卫�?)
         for k = 1:numGS
             allPositions(numSats + k, :) = GS_Pos_All{k}(t_idx, :);
             allVelocities(numSats + k, :) = [0, 0, 0];
         end
 
-        % --- B. 并行计算所有链路 (ISL + 星地) ---
+        % --- B. 并行计算�?有链�? (ISL + 星地) ---
         results_dist = zeros(totalPairs, 1);
         results_omega = zeros(totalPairs, 1);
         results_visible = false(totalPairs, 1);
@@ -520,11 +520,11 @@ for i = 2:8
             dist = norm(d_vec);
             results_dist(k_pair) = dist;
 
-            % 计算相对角速度
+            % 计算相对角�?�度
             v_vec = vel2 - vel1;
             results_omega(k_pair) = norm(cross(d_vec, v_vec)) / (dist^2 + eps);
 
-            % 遮挡检查
+            % 遮挡�?�?
             isVisible = true;
             t_val = -dot(pos1, d_vec) / (dot(d_vec, d_vec) + eps);
             if t_val > 0 && t_val < 1
@@ -536,7 +536,7 @@ for i = 2:8
             results_visible(k_pair) = isVisible;
         end
 
-        % --- C. 筛选并保存 ---
+        % --- C. 筛�?�并保存 ---
         mask = results_visible & (results_dist < distance_limit);
         
         visible_dists = results_dist(mask);
@@ -555,19 +555,19 @@ for i = 2:8
             file_name_isl = sprintf('visibility_step%04d_%s.csv', t_idx, safe_time_str);
             full_path_isl = fullfile(vis_folder_limit, file_name_isl);
             writetable(T_table, full_path_isl);
-            fprintf('总链路: %d条 (耗时 %.2fs)\n', count, toc(step_timer));
+            fprintf('总链�?: %d�? (耗时 %.2fs)\n', count, toc(step_timer));
         else
-            fprintf('无有效链路 (耗时 %.2fs)\n', toc(step_timer));
+            fprintf('无有效链�? (耗时 %.2fs)\n', toc(step_timer));
         end
     end
 
-    fprintf('\nBatch Limit=%d km 执行完毕! 总耗时: %.2f 秒\n', distance_limit, toc(total_timer_batch));
+    fprintf('\nBatch Limit=%d km 执行完毕! 总�?�时: %.2f 秒\n', distance_limit, toc(total_timer_batch));
 end
 
 %% =========================================================================
 %% [可视化功能] 根据 calculated_routes.csv 绘制红色链路
 %% =========================================================================
-% 注意：此功能需要外部生成的 calculated_routes.csv 存在于 MATLAB 当前目录中
+% 注意：此功能�?要外部生成的 calculated_routes.csv 存在�? MATLAB 当前目录�?
 fprintf('\n[可视化] 正在尝试根据 calculated_routes.csv 绘制红色链路...\n');
 route_file = 'calculated_routes.csv'; 
 
@@ -595,7 +595,7 @@ if exist(route_file, 'file')
             access_obj.Graphics.Color = color_red;
             access_obj.Graphics.LineWidth = line_width;
         catch ME
-            fprintf('    警告: 无法连接 %s 和 %s\n', source_gs, source_sat);
+            fprintf('    警告: 无法连接 %s �? %s\n', source_gs, source_sat);
         end
 
         % B. ISL
@@ -623,16 +623,16 @@ if exist(route_file, 'file')
             access_obj.Graphics.Color = color_red;
             access_obj.Graphics.LineWidth = line_width;
         catch ME
-            fprintf('    警告: 无法连接 %s 和 %s\n', target_sat, target_gs);
+            fprintf('    警告: 无法连接 %s �? %s\n', target_sat, target_gs);
         end
     end
     
-    fprintf('[可视化] 全部完成！请切换到 STK 3D 窗口查看红色链路。\n');
+    fprintf('[可视化] 全部完成！请切换�? STK 3D 窗口查看红色链路。\n');
     if ~USE_ENGINE
         root.ExecuteCommand('Graphics * Draw'); 
     end
 else
-    fprintf('提示: 未找到 %s，跳过可视化步骤。\n', route_file);
+    fprintf('提示: 未找�? %s，跳过可视化步骤。\n', route_file);
 end
 
 function [vectorData, timeVals] = extractFixedVectorSeries(obj, vectorName, startTime, stopTime, timeStep, returnTime)
